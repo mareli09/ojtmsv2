@@ -215,7 +215,34 @@
                 </div>
             @endif
 
-            <form action="/login" method="POST">
+            @if (session('message'))
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    {{ session('message') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            @endif
+
+            <div class="test-accounts">
+                <p><strong>🧪 Test Accounts:</strong></p>
+                <div style="background: white; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 3px solid var(--ojtms-accent);">
+                    @if(isset($testAccounts) && $testAccounts->count() > 0)
+                        @foreach($testAccounts as $account)
+                            <p style="margin: 5px 0;">
+                                <strong>{{ ucfirst($account->role) }}:</strong> 
+                                {{ $account->username }} / password
+                            </p>
+                        @endforeach
+                    @else
+                        <p style="margin: 5px 0;"><strong>Admin:</strong> admin / password</p>
+                        <p style="margin: 5px 0;"><strong>Faculty:</strong> juandelacru / password</p>
+                        <p style="margin: 5px 0;"><strong>Student:</strong> johnsmith / password</p>
+                    @endif
+                </div>
+            </div>
+
+            <hr>
+
+            <form action="{{ route('login.post') }}" method="POST">
                 @csrf
                 <div class="mb-3">
                     <label for="username" class="form-label">Username</label>
@@ -230,15 +257,6 @@
 
             <div class="login-footer">
                 <p><a href="/recover">Forgot password?</a></p>
-            </div>
-
-            <hr>
-
-            <div class="test-accounts">
-                <p><strong>Test Accounts:</strong></p>
-                <p>Admin: admin1 / admin123<br>
-                Faculty: faculty1 / faculty123<br>
-                Student: student1 / student123</p>
             </div>
         </div>
     </div>

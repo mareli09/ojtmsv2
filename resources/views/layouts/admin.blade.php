@@ -282,7 +282,7 @@
                 <a class="nav-link" href="/">
                     <i class="fas fa-home"></i> Back to Site
                 </a>
-                <a class="nav-link logout-btn" href="/logout">
+                <a class="nav-link logout-btn" href="{{ route('logout') }}">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </div>

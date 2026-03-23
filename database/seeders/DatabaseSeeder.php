@@ -89,6 +89,8 @@ class DatabaseSeeder extends Seeder
             'section_id' => null,
             'status' => 'active',
         ]);
+        
+        \Log::info('Test Account Created - Admin: admin / password');
 
         // Step 3: Create faculty users and assign them to sections (one faculty per section)
         $faculty1 = User::create([
@@ -105,6 +107,7 @@ class DatabaseSeeder extends Seeder
             'section_id' => $section1->id,
             'status' => 'active',
         ]);
+        \Log::info('Test Account Created - Faculty 1: juandelacru / password');
 
         $faculty2 = User::create([
             'employee_id' => 'FAC002',
@@ -119,6 +122,7 @@ class DatabaseSeeder extends Seeder
             'section_id' => $section2->id,
             'status' => 'active',
         ]);
+        \Log::info('Test Account Created - Faculty 2: mariasantos / password');
 
         $faculty3 = User::create([
             'employee_id' => 'FAC003',
@@ -133,6 +137,7 @@ class DatabaseSeeder extends Seeder
             'section_id' => $section3->id,
             'status' => 'active',
         ]);
+        \Log::info('Test Account Created - Faculty 3: carloslopez / password');
 
         $faculty4 = User::create([
             'employee_id' => 'FAC004',
@@ -147,6 +152,7 @@ class DatabaseSeeder extends Seeder
             'section_id' => $section4->id,
             'status' => 'active',
         ]);
+        \Log::info('Test Account Created - Faculty 4: ruthgonzales / password');
 
         // Step 4: Update sections to link to faculty (inverse relationship)
         $section1->update(['faculty_id' => $faculty1->id]);
@@ -169,6 +175,7 @@ class DatabaseSeeder extends Seeder
             'section_id' => $section1->id,
             'status' => 'active',
         ]);
+        \Log::info('Test Account Created - Student 1: johnsmith / password');
 
         User::create([
             'student_id' => 'STU002',
@@ -268,5 +275,10 @@ class DatabaseSeeder extends Seeder
             'section_id' => $section4->id,
             'status' => 'active',
         ]);
+        
+        // Summary of test accounts
+        \Log::info('======== DATABASE SEEDING COMPLETE ========');
+        \Log::info('All test accounts have been created with password: "password"');
+        \Log::info('=======================================');
     }
 }

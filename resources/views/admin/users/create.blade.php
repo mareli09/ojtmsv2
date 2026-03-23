@@ -104,9 +104,14 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="password" class="form-label">Password {{ !isset($user) ? '(Required)' : '(Leave blank to keep current)' }} <span class="text-danger">*</span></label>
-                                <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password" 
-                                    {{ !isset($user) ? 'required' : '' }}>
-                                @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div class="input-group position-relative">
+                                    <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password" 
+                                        {{ !isset($user) ? 'required' : '' }}>
+                                    <button type="button" class="btn btn-outline-secondary position-absolute end-0 top-50 translate-middle-y" id="togglePassword" style="border: none; background: none; z-index: 10;">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                @error('password')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                             </div>
                             <div class="col-md-6">
                                 <label for="contact" class="form-label">Contact Number</label>
@@ -218,6 +223,29 @@
         color: var(--ojtms-primary);
         font-weight: 600;
     }
+
+    /* Password toggle button styling */
+    #togglePassword {
+        padding: 0.5rem 0.75rem;
+        color: #6c757d;
+        cursor: pointer;
+        border-radius: 0.25rem;
+        transition: all 0.2s ease;
+    }
+
+    #togglePassword:hover {
+        color: var(--ojtms-primary);
+        background-color: rgba(0, 1, 86, 0.05) !important;
+    }
+
+    #togglePassword:focus {
+        outline: none;
+        box-shadow: none;
+    }
+
+    .input-group .form-control {
+        padding-right: 2.5rem;
+    }
 </style>
 
 <script>
@@ -253,6 +281,28 @@
                 facultyWarning.style.display = 'none';
             }
         }
+    }
+
+    // Password visibility toggle
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            // Toggle icon
+            const icon = this.querySelector('i');
+            if (type === 'text') {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        });
     }
 </script>
 @endsection

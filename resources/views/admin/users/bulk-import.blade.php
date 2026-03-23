@@ -61,16 +61,30 @@
                 </div>
             </div>
 
-            @if(session('error'))
+            @if($errors->has('file'))
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <strong>Import Error:</strong> {{ session('error') }}
+                <strong><i class="fas fa-exclamation-circle me-2"></i>File Error:</strong> 
+                {{ $errors->first('file') }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
             @endif
 
             @if(session('success'))
             <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <strong><i class="fas fa-check-circle me-2"></i>Success!</strong> 
                 {{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            @endif
+
+            @if(session('import_errors'))
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <strong><i class="fas fa-exclamation-triangle me-2"></i>Import Warnings:</strong>
+                <ul class="mb-0 mt-2">
+                    @foreach(session('import_errors') as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
             @endif

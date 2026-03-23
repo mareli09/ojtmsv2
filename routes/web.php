@@ -18,17 +18,71 @@ Route::get('/', function () {
 });
 
 Route::get('/login', function () {
-    return view('auth.login');
+    // If already logged in, redirect to appropriate dashboard
+    if (session()->has('user_id') && session()->has('user')) {
+        $user = session('user');
+        if ($user->role === 'admin') {
+            return redirect('/admin/dashboard');
+        } elseif ($user->role === 'faculty') {
+            return redirect('/faculty/dashboard');
+        } else {
+            return redirect('/student/dashboard');
+        }
+    }
+    
+    // Fetch test accounts from database
+    $testAccounts = \App\Models\User::whereIn('role', ['admin', 'faculty', 'student'])
+        ->limit(3)
+        ->get()
+        ->groupBy('role')
+        ->map(fn($group) => $group->first());
+    
+    return view('auth.login', ['testAccounts' => $testAccounts]);
 });
 
+Route::post('/login', function (\Illuminate\Http\Request $request) {
+    $request->validate([
+        'username' => 'required|string',
+        'password' => 'required|string',
+    ]);
+
+    $user = \App\Models\User::where('username', $request->username)->first();
+
+    if ($user && \Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+        session(['user_id' => $user->id, 'user' => $user, 'user_role' => $user->role]);
+        
+        // Redirect based on role
+        if ($user->role === 'admin') {
+            return redirect('/admin/dashboard');
+        } elseif ($user->role === 'faculty') {
+            return redirect('/faculty/dashboard');
+        } else {
+            return redirect('/student/dashboard');
+        }
+    }
+
+    return back()->withErrors(['username' => 'Invalid username or password.']);
+})->name('login.post');
+
+Route::get('/logout', function () {
+    session()->forget(['user_id', 'user', 'user_role']);
+    session()->flush();
+    return redirect('/login')->with('message', 'You have been logged out successfully.');
+})->name('logout');
+
 // Admin Routes
-Route::prefix('admin')->group(function () {
+Route::prefix('admin')->middleware('checkauth')->group(function () {
     Route::get('/dashboard', function () {
+        $totalUsers = \App\Models\User::where('deleted_at', null)->count();
+        $admins = \App\Models\User::where('role', 'admin')->where('deleted_at', null)->count();
+        $faculty = \App\Models\User::where('role', 'faculty')->where('deleted_at', null)->count();
+        $students = \App\Models\User::where('role', 'student')->where('deleted_at', null)->count();
+        
         return view('admin.dashboard', [
-            'totalUsers' => 125,
-            'admins' => 5,
-            'faculty' => 30,
-            'students' => 90,
+            'totalUsers' => $totalUsers,
+            'admins' => $admins,
+            'faculty' => $faculty,
+            'students' => $students,
         ]);
     });
     
@@ -373,15 +427,20 @@ Route::prefix('admin')->group(function () {
     })->name('users.bulkImportForm');
     
     Route::get('/users/download-sample', function () {
-        $headers = ['Content-Type: text/csv; charset=utf-8', 'Content-Disposition: attachment; filename=users_sample.csv'];
-        $callback = function() {
-            $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['first_name', 'middle_name', 'last_name', 'username', 'email', 'password', 'role', 'employee_id', 'student_id', 'contact', 'department', 'section_id', 'status']);
-            fputcsv($handle, ['John', 'M', 'Doe', 'johndoe', 'john@example.com', 'password123', 'faculty', 'EMP001', '', '0912345678', 'IT', '1', 'active']);
-            fputcsv($handle, ['Jane', '', 'Smith', 'janesmith', 'jane@example.com', 'password123', 'student', '', 'STU001', '0987654321', '', '1', 'active']);
-            fclose($handle);
-        };
-        return response()->stream($callback, 200, $headers);
+        // Create sample CSV data
+        $csvData = "first_name,middle_name,last_name,username,email,password,role,employee_id,student_id,contact,department,section_id,status\n";
+        $csvData .= "John,M,Doe,johndoe,john@example.com,password123,faculty,EMP001,,0912345678,IT,1,active\n";
+        $csvData .= "Jane,,Smith,janesmith,jane@example.com,password123,student,,STU001,0987654321,IT,1,active\n";
+        $csvData .= "Michael,J,Anderson,michaelands,michael@example.com,password123,student,,STU003,0912000000,IT,2,active\n";
+        $csvData .= "admin,A,User,adminuser,admin2@example.com,password123,admin,EMP099,,0912111111,Administration,,active\n";
+        
+        // Return file download response
+        return response($csvData)
+            ->header('Content-Type', 'text/csv; charset=utf-8')
+            ->header('Content-Disposition', 'attachment; filename="users_sample.csv"')
+            ->header('Pragma', 'no-cache')
+            ->header('Cache-Control', 'must-revalidate, post-check=0, pre-check=0')
+            ->header('Expires', '0');
     })->name('users.downloadSample');
     
     Route::post('/users/bulk-import', function (\Illuminate\Http\Request $request) {
@@ -391,24 +450,105 @@ Route::prefix('admin')->group(function () {
         
         $file = $request->file('file');
         $handle = fopen($file->getPathname(), 'r');
+        
+        if (!$handle) {
+            return back()->withErrors(['file' => 'Unable to read the file. Please ensure it is a valid CSV file.']);
+        }
+        
         $header = fgetcsv($handle);
         $imported = 0;
         $errors = [];
+        $rowNumber = 2; // Start from 2 since row 1 is headers
         
         while ($row = fgetcsv($handle)) {
             try {
+                // Skip empty rows
+                if (empty(array_filter($row))) {
+                    $rowNumber++;
+                    continue;
+                }
+                
+                // Combine header with row data
                 $data = array_combine($header, $row);
+                
+                if (!$data) {
+                    $errors[] = "Row {$rowNumber}: Column count mismatch with headers.";
+                    $rowNumber++;
+                    continue;
+                }
+                
+                // Validate required fields
+                $required = ['first_name', 'last_name', 'username', 'email', 'password', 'role'];
+                foreach ($required as $field) {
+                    if (empty($data[$field])) {
+                        $errors[] = "Row {$rowNumber}: Missing required field '{$field}'";
+                        $rowNumber++;
+                        continue 2;
+                    }
+                }
+                
+                // Validate role
+                if (!in_array($data['role'], ['admin', 'faculty', 'student'])) {
+                    $errors[] = "Row {$rowNumber}: Invalid role '{$data['role']}'. Must be admin, faculty, or student.";
+                    $rowNumber++;
+                    continue;
+                }
+                
+                // Validate status
+                if (!empty($data['status']) && !in_array($data['status'], ['active', 'inactive'])) {
+                    $errors[] = "Row {$rowNumber}: Invalid status '{$data['status']}'. Must be active or inactive.";
+                    $rowNumber++;
+                    continue;
+                }
+                
+                // Set default status if not provided
+                if (empty($data['status'])) {
+                    $data['status'] = 'active';
+                }
+                
+                // Hash the password
                 $data['password'] = bcrypt($data['password']);
-                \App\Models\User::create($data);
+                
+                // Remove empty values to avoid column conflicts
+                $data = array_filter($data, function($value) {
+                    return $value !== '';
+                });
+                
+                // Create the user
+                $user = \App\Models\User::create($data);
+                
+                // Synchronize section faculty if this is a faculty user
+                if ($data['role'] === 'faculty' && !empty($data['section_id'])) {
+                    $section = Section::find($data['section_id']);
+                    if ($section) {
+                        $section->update(['faculty_id' => $user->id]);
+                    }
+                }
+                
                 $imported++;
             } catch (\Exception $e) {
-                $errors[] = 'Row error: ' . $e->getMessage();
+                $errors[] = "Row {$rowNumber}: " . $e->getMessage();
             }
+            
+            $rowNumber++;
         }
         
         fclose($handle);
         
-        return redirect('/admin/users')->with('success', "Imported $imported users successfully!");
+        if ($imported > 0) {
+            $message = "Successfully imported {$imported} user(s)";
+            if (count($errors) > 0) {
+                $message .= " with " . count($errors) . " error(s)";
+            }
+            
+            if (count($errors) > 0) {
+                return back()->with('success', $message)->with('import_errors', $errors);
+            }
+            
+            return redirect('/admin/users')->with('success', $message);
+        } else {
+            return back()->withErrors(['file' => 'No users imported. ' . (count($errors) > 0 ? 'Errors: ' . implode(', ', $errors) : '')]);
+        }
     })->name('users.bulkImport');
     
     // Faculty Assignment Management - Find and fix duplicate faculty in sections
@@ -510,5 +650,43 @@ Route::prefix('admin')->group(function () {
     
     Route::get('/reports', function () {
         return view('admin.reports');
+    });
+});
+
+// Faculty Routes
+Route::prefix('faculty')->middleware('checkauth')->group(function () {
+    Route::get('/dashboard', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        
+        $section = \App\Models\Section::find($user->section_id);
+        $studentsCount = $section ? $section->students()->count() : 0;
+        
+        return view('faculty.dashboard', [
+            'user' => $user,
+            'section' => $section,
+            'studentsCount' => $studentsCount,
+        ]);
+    });
+});
+
+// Student Routes
+Route::prefix('student')->middleware('checkauth')->group(function () {
+    Route::get('/dashboard', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        
+        $section = \App\Models\Section::find($user->section_id);
+        $faculty = $section ? $section->faculty : null;
+        
+        return view('student.dashboard', [
+            'user' => $user,
+            'section' => $section,
+            'faculty' => $faculty,
+        ]);
     });
 });
