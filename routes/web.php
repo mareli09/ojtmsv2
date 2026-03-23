@@ -4,15 +4,25 @@ use Illuminate\Support\Facades\Route;
 use App\Models\Section;
 
 Route::get('/', function () {
+    $cms = \App\Models\CMS::all()->keyBy('key');
+    $announcements = \App\Models\Announcement::active()->latest()->get();
+    
     return view('landing', [
-        'announcements' => collect([]),
+        'announcements' => $announcements,
         'cms' => [
-            'about' => 'The OJT Monitoring System (OJTMS) is committed to fostering meaningful partnerships between educational institutions, companies, and students through comprehensive on-the-job training management, real-time monitoring, and intelligent analytics.',
-            'mission' => 'To empower students and educators through an intelligent, integrated platform that monitors OJT progress, ensures quality internship experiences, and facilitates meaningful skill development.',
-            'vision' => 'A comprehensive platform leveraging AI and data analytics to create transparent, measurable, and transformative internship experiences that bridge academia and industry.',
-            'contact_email' => 'ojtms@example.edu.ph',
-            'contact_phone' => '+63 900 000 0000',
-            'contact_address' => 'Sample City, Philippines',
+            'header' => $cms->get('header')->value ?? 'AI-Assisted OJT Monitoring System',
+            'subheader' => $cms->get('subheader')->value ?? 'Streamline On-the-Job Training Management with Intelligent Analytics',
+            'about' => $cms->get('about')->value ?? 'The OJT Monitoring System (OJTMS) is committed to fostering meaningful partnerships between educational institutions, companies, and students through comprehensive on-the-job training management, real-time monitoring, and intelligent analytics.',
+            'mission' => $cms->get('mission')->value ?? 'To empower students and educators through an intelligent, integrated platform that monitors OJT progress, ensures quality internship experiences, and facilitates meaningful skill development.',
+            'vision' => $cms->get('vision')->value ?? 'A comprehensive platform leveraging AI and data analytics to create transparent, measurable, and transformative internship experiences that bridge academia and industry.',
+            'contact_email' => $cms->get('contact_email')->value ?? 'ojtms@example.edu.ph',
+            'contact_phone' => $cms->get('contact_phone')->value ?? '+63 900 000 0000',
+            'contact_address' => $cms->get('contact_address')->value ?? 'Sample City, Philippines',
+            'facebook_url' => $cms->get('facebook_url')->value ?? 'https://facebook.com',
+            'instagram_url' => $cms->get('instagram_url')->value ?? 'https://instagram.com',
+            'linkedin_url' => $cms->get('linkedin_url')->value ?? 'https://linkedin.com',
+            'twitter_url' => $cms->get('twitter_url')->value ?? 'https://twitter.com',
+            'youtube_url' => $cms->get('youtube_url')->value ?? 'https://youtube.com',
         ]
     ]);
 });
@@ -637,19 +647,257 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
     })->name('faculty.fixDuplicateManual');
     
     Route::get('/cms', function () {
-        return view('admin.cms');
+        $cms = \App\Models\CMS::all()->keyBy('key');
+        return view('admin.cms', ['cms' => $cms]);
     });
     
+    Route::post('/cms', function (\Illuminate\Http\Request $request) {
+        $request->validate([
+            'header' => 'required|string|max:255',
+            'subheader' => 'required|string|max:500',
+            'about' => 'required|string',
+            'mission' => 'required|string',
+            'vision' => 'required|string',
+            'contact_email' => 'required|email',
+            'contact_phone' => 'required|string|max:20',
+            'contact_address' => 'required|string|max:255',
+            'facebook_url' => 'nullable|url',
+            'instagram_url' => 'nullable|url',
+            'linkedin_url' => 'nullable|url',
+            'twitter_url' => 'nullable|url',
+            'youtube_url' => 'nullable|url',
+        ]);
+
+        $cmsFields = [
+            'header' => $request->header,
+            'subheader' => $request->subheader,
+            'about' => $request->about,
+            'mission' => $request->mission,
+            'vision' => $request->vision,
+            'contact_email' => $request->contact_email,
+            'contact_phone' => $request->contact_phone,
+            'contact_address' => $request->contact_address,
+            'facebook_url' => $request->facebook_url ?? 'https://facebook.com',
+            'instagram_url' => $request->instagram_url ?? 'https://instagram.com',
+            'linkedin_url' => $request->linkedin_url ?? 'https://linkedin.com',
+            'twitter_url' => $request->twitter_url ?? 'https://twitter.com',
+            'youtube_url' => $request->youtube_url ?? 'https://youtube.com',
+        ];
+
+        foreach ($cmsFields as $key => $value) {
+            $section = in_array($key, ['facebook_url', 'instagram_url', 'linkedin_url', 'twitter_url', 'youtube_url']) ? 'social_media' : 'general';
+            \App\Models\CMS::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value, 'section' => $section]
+            );
+        }
+
+        return back()->with('success', 'CMS Settings updated successfully!');
+    })->name('cms.update');
+    
+    // Announcements Routes
     Route::get('/announcements', function () {
-        return view('admin.announcements.index');
+        $activeAnnouncements = \App\Models\Announcement::active()->latest()->get();
+        $archivedAnnouncements = \App\Models\Announcement::archived()->latest()->get();
+        return view('admin.announcements.index', [
+            'activeAnnouncements' => $activeAnnouncements,
+            'archivedAnnouncements' => $archivedAnnouncements
+        ]);
     });
     
     Route::get('/announcements/create', function () {
         return view('admin.announcements.create');
     });
     
+    Route::post('/announcements', function (\Illuminate\Http\Request $request) {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'content' => 'required|string',
+        ]);
+
+        \App\Models\Announcement::create([
+            'title' => $request->title,
+            'content' => $request->content,
+            'status' => 'active',
+            'created_by' => session('user_id'),
+        ]);
+
+        return redirect('/admin/announcements')->with('success', 'Announcement published successfully!');
+    });
+    
+    Route::get('/announcements/{id}/edit', function ($id) {
+        $announcement = \App\Models\Announcement::find($id);
+        if (!$announcement) {
+            return redirect('/admin/announcements')->with('error', 'Announcement not found!');
+        }
+        return view('admin.announcements.edit', ['announcement' => $announcement]);
+    });
+    
+    Route::put('/announcements/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'content' => 'required|string',
+            'status' => 'required|in:active,inactive',
+        ]);
+
+        $announcement = \App\Models\Announcement::find($id);
+        if (!$announcement) {
+            return redirect('/admin/announcements')->with('error', 'Announcement not found!');
+        }
+
+        $announcement->update([
+            'title' => $request->title,
+            'content' => $request->content,
+            'status' => $request->status,
+        ]);
+
+        return redirect('/admin/announcements')->with('success', 'Announcement updated successfully!');
+    });
+    
+    Route::post('/announcements/{id}/archive', function ($id) {
+        $announcement = \App\Models\Announcement::find($id);
+        if (!$announcement) {
+            return redirect('/admin/announcements')->with('error', 'Announcement not found!');
+        }
+
+        $announcement->delete();
+        return redirect('/admin/announcements')->with('success', 'Announcement archived successfully!');
+    });
+    
+    Route::post('/announcements/{id}/restore', function ($id) {
+        $announcement = \App\Models\Announcement::withTrashed()->find($id);
+        if (!$announcement) {
+            return redirect('/admin/announcements')->with('error', 'Announcement not found!');
+        }
+
+        $announcement->restore();
+        return redirect('/admin/announcements')->with('success', 'Announcement restored successfully!');
+    });
+    
+    Route::post('/announcements/{id}/delete', function ($id) {
+        $announcement = \App\Models\Announcement::withTrashed()->find($id);
+        if (!$announcement) {
+            return redirect('/admin/announcements')->with('error', 'Announcement not found!');
+        }
+
+        $announcement->forceDelete();
+        return redirect('/admin/announcements')->with('success', 'Announcement permanently deleted!');
+    });
+    
+    // Reports & Export Routes
     Route::get('/reports', function () {
-        return view('admin.reports');
+        return view('admin.reports', [
+            'usersCount' => \App\Models\User::count(),
+            'sectionsCount' => \App\Models\Section::count(),
+            'announcementsCount' => \App\Models\Announcement::count(),
+            'cmsCount' => \App\Models\CMS::count(),
+            'activeUsersCount' => \App\Models\User::where('status', 'active')->count(),
+            'activeSectionsCount' => \App\Models\Section::where('status', 'active')->count(),
+            'activeAnnouncementsCount' => \App\Models\Announcement::where('status', 'active')->count(),
+        ]);
+    });
+    
+    // Export individual tables as CSV
+    Route::get('/reports/export/{table}', function ($table) {
+        $allowedTables = ['users', 'sections', 'announcements', 'cms_settings'];
+        
+        if (!in_array($table, $allowedTables)) {
+            return response()->json(['error' => 'Table not found'], 404);
+        }
+
+        $data = \App\Helpers\CsvExporter::exportTable($table);
+        
+        if (!$data) {
+            return response()->json(['error' => 'No data found'], 404);
+        }
+
+        $filename = $data['filename'];
+        $headers = $data['headers'];
+        $rows = $data['rows'];
+
+        // Determine the actual table name for mapping
+        $tableMap = [
+            'cms_settings' => 'CMS Settings',
+            'users' => 'Users',
+            'sections' => 'Sections',
+            'announcements' => 'Announcements',
+        ];
+
+        return response()->streamDownload(function() use ($headers, $rows) {
+            \App\Helpers\CsvExporter::generateCsv($headers, $rows);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    });
+
+    // Preview data endpoint
+    Route::get('/reports/preview/{table}', function ($table) {
+        $allowedTables = [
+            'users' => 'users',
+            'sections' => 'sections',
+            'announcements' => 'announcements',
+            'cms' => 'cms_settings',
+        ];
+        
+        if (!isset($allowedTables[$table])) {
+            return response()->json(['success' => false, 'error' => 'Table not found']);
+        }
+
+        $dbTable = $allowedTables[$table];
+        $data = \App\Helpers\CsvExporter::exportTable($dbTable);
+        
+        if (!$data) {
+            return response()->json(['success' => false, 'error' => 'No data found']);
+        }
+
+        $html = \App\Helpers\CsvExporter::generatePreviewHtml($data['headers'], $data['rows'], 5);
+        
+        return response()->json(['success' => true, 'html' => $html]);
+    });
+
+    // Export all tables as ZIP
+    Route::get('/reports/export/all', function () {
+        $zipPath = storage_path('app/exports/complete_db_' . now()->format('Y-m-d_H-i-s') . '.zip');
+        
+        // Create exports directory if it doesn't exist
+        if (!file_exists(dirname($zipPath))) {
+            mkdir(dirname($zipPath), 0755, true);
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE) !== true) {
+            abort(500, 'Could not create ZIP file');
+        }
+
+        $tables = ['users', 'sections', 'announcements', 'cms_settings'];
+
+        foreach ($tables as $table) {
+            $data = \App\Helpers\CsvExporter::exportTable($table);
+            
+            if ($data) {
+                $filename = str_replace(['_' . now()->format('Y-m-d_H-i-s') . '.csv'], '', $data['filename']);
+                
+                // Create CSV content in memory
+                $csvOutput = fopen('php://memory', 'r+');
+                fwrite($csvOutput, "\xEF\xBB\xBF"); // BOM
+                fputcsv($csvOutput, $data['headers']);
+                
+                foreach ($data['rows'] as $row) {
+                    fputcsv($csvOutput, $row);
+                }
+                
+                rewind($csvOutput);
+                $csvContent = stream_get_contents($csvOutput);
+                fclose($csvOutput);
+                
+                $zip->addFromString($filename . '.csv', $csvContent);
+            }
+        }
+
+        $zip->close();
+
+        return response()->download($zipPath)->deleteFileAfterSend(true);
     });
 });
 

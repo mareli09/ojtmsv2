@@ -291,8 +291,8 @@ body{
 <!-- ===== HERO SECTION ===== -->
 <section id="home" class="hero-section text-center">
 <div class="container">
-    <h1 class="display-3 fw-bold mb-3">AI-Assisted OJT Monitoring System</h1>
-    <p class="lead mb-5">Streamline On-the-Job Training Management with Intelligent Analytics</p>
+    <h1 class="display-3 fw-bold mb-3">{{ $cms['header'] ?? 'AI-Assisted OJT Monitoring System' }}</h1>
+    <p class="lead mb-5">{{ $cms['subheader'] ?? 'Streamline On-the-Job Training Management with Intelligent Analytics' }}</p>
     <div>
         <a href="/login" class="btn btn-ojtms btn-lg fw-bold me-3">Get Started</a>
         <a href="#about" class="btn btn-ojtms-outline btn-lg fw-bold">Learn More</a>
@@ -416,10 +416,10 @@ body{
 
                 <p class="text-primary-custom fw-bold mb-3">Follow Us</p>
                 <div>
-                    <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
+                    <a href="{{ $cms['facebook_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                    <a href="{{ $cms['instagram_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    <a href="{{ $cms['linkedin_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="{{ $cms['twitter_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-twitter"></i></a>
                 </div>
             </div>
         </div>
@@ -432,10 +432,10 @@ body{
 <footer class="footer-ojtms text-center py-4">
 
 <div class="mb-3">
-    <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
-    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
-    <a href="#" class="social-icon"><i class="fab fa-youtube"></i></a>
-    <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
+    <a href="{{ $cms['facebook_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+    <a href="{{ $cms['instagram_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-instagram"></i></a>
+    <a href="{{ $cms['youtube_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-youtube"></i></a>
+    <a href="{{ $cms['twitter_url'] ?? '#' }}" target="_blank" class="social-icon"><i class="fab fa-twitter"></i></a>
 </div>
 
 <div class="mb-2">

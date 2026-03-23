@@ -8,7 +8,7 @@
     <a href="/admin/users" class="nav-link"><i class="fas fa-users"></i> User Management</a>
     <a href="/admin/users-archive" class="nav-link active"><i class="fas fa-archive"></i> Archived Users</a>
     <a href="/admin/cms" class="nav-link"><i class="fas fa-cogs"></i> CMS Settings</a>
-    <a href="/admin/announcements" class="nav-link"><i class="fas fa-megaphone"></i> Announcements</a>
+    <a href="/admin/announcements" class="nav-link"><i class="fas fa-bullhorn"></i> Announcements</a>
     <a href="/admin/reports" class="nav-link"><i class="fas fa-file-pdf"></i> Reports</a>
 @endsection
 
