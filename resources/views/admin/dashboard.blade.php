@@ -4,6 +4,7 @@
 
 @section('sidebar')
     <a href="/admin/dashboard" class="nav-link active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+    <a href="/admin/sections" class="nav-link"><i class="fas fa-book"></i> Sections</a>
     <a href="/admin/users" class="nav-link"><i class="fas fa-users"></i> User Management</a>
     <a href="/admin/cms" class="nav-link"><i class="fas fa-cogs"></i> CMS Settings</a>
     <a href="/admin/announcements" class="nav-link"><i class="fas fa-megaphone"></i> Announcements</a>
@@ -65,6 +66,9 @@
     <!-- Action Buttons -->
     <div class="row">
         <div class="col-12">
+            <a href="/admin/sections/create" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Create Section
+            </a>
             <a href="/admin/users/create" class="btn btn-primary">
                 <i class="fas fa-plus-circle"></i> Add New User
             </a>
