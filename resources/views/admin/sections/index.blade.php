@@ -15,9 +15,14 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-book"></i> Manage Sections</h2>
-        <a href="/admin/sections/create" class="btn btn-primary">
-            <i class="fas fa-plus-circle"></i> Add New Section
-        </a>
+        <div>
+            <a href="/admin/sections-archive" class="btn btn-secondary me-2">
+                <i class="fas fa-archive"></i> Archived Sections
+            </a>
+            <a href="/admin/sections/create" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Add New Section
+            </a>
+        </div>
     </div>
 
     @if(session('success'))
@@ -27,60 +32,137 @@
     </div>
     @endif
 
+    <!-- Search and Filter Card -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" class="form-control" id="searchName" placeholder="Search section name...">
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="filterSchoolYear">
+                        <option value="">All School Years</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="filterTerm">
+                        <option value="">All Terms</option>
+                        <option value="Term 1">Term 1</option>
+                        <option value="Term 2">Term 2</option>
+                        <option value="Term 3">Term 3</option>
+                        <option value="Midyear">Midyear</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="filterStatus">
+                        <option value="">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Closed">Closed</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-secondary w-100" id="resetFilters">
+                        <i class="fas fa-redo"></i> Reset Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
-        <div class="card-header">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">All Sections</h5>
+            <div>
+                <small class="text-muted">Sort by: </small>
+                <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="sortBy">
+                    <option value="name">Section Name</option>
+                    <option value="school_year">School Year</option>
+                    <option value="term">Term</option>
+                    <option value="status">Status</option>
+                </select>
+            </div>
         </div>
         <div class="card-body">
             @if($sections && count($sections) > 0)
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover" id="sectionsTable">
                     <thead>
                         <tr>
-                            <th>Section Code</th>
+                            <th>Section Name</th>
                             <th>School Year</th>
                             <th>Term</th>
                             <th>Schedule</th>
                             <th>Room</th>
                             <th>Faculty</th>
-                            <th>Students</th>
+                            <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="sectionsTableBody">
                         @foreach($sections as $section)
-                        <tr>
+                        <tr class="section-row" data-name="{{ $section->name ?? '' }}" data-school-year="{{ $section->school_year ?? '' }}" data-term="{{ $section->term ?? '' }}" data-status="{{ $section->status ?? '' }}">
                             <td>
-                                <strong>{{ $section['code'] ?? 'OJT-001' }}</strong>
+                                <strong>{{ $section->name ?? 'A1' }}</strong>
                             </td>
-                            <td>{{ $section['school_year'] ?? '2025-2026' }}</td>
+                            <td>{{ $section->school_year ?? '2025-2026' }}</td>
                             <td>
                                 <span class="badge" style="background-color: var(--ojtms-accent); color: var(--ojtms-primary);">
-                                    {{ $section['term'] ?? 'Term 1' }}
+                                    {{ $section->term ?? 'Term 1' }}
                                 </span>
                             </td>
                             <td>
                                 <small>
-                                    {{ $section['day'] ?? 'Monday' }}<br>
-                                    {{ $section['start_time'] ?? '08:00' }} - {{ $section['end_time'] ?? '12:00' }}
+                                    {{ $section->day ?? 'Monday' }}<br>
+                                    {{ $section->start_time ?? '08:00' }} - {{ $section->end_time ?? '12:00' }}
                                 </small>
                             </td>
-                            <td>{{ $section['room'] ?? 'Room 101' }}</td>
+                            <td>{{ $section->room ?? 'Room 101' }}</td>
                             <td>
-                                <small>{{ $section['faculty'] ?? 'Faculty' }}</small>
+                                @php
+                                    $facultyNames = [
+                                        1 => 'Dr. Juan Dela Cruz',
+                                        2 => 'Prof. Maria Santos',
+                                        3 => 'Engr. Carlos Lopez'
+                                    ];
+                                @endphp
+                                @if($section->faculty_id && isset($facultyNames[$section->faculty_id]))
+                                    <span class="badge" style="background-color: var(--ojtms-primary); color: white;">
+                                        {{ $facultyNames[$section->faculty_id] }}
+                                    </span>
+                                @else
+                                    <em class="text-muted">--</em>
+                                @endif
                             </td>
                             <td>
-                                <span class="badge bg-info">{{ $section['students_count'] ?? 0 }}</span>
+                                @php
+                                    $statusColor = '#27ae60'; // active
+                                    if ($section->status === 'inactive') {
+                                        $statusColor = '#e74c3c'; // red
+                                    } elseif ($section->status === 'completed') {
+                                        $statusColor = '#95a5a6'; // gray
+                                    }
+                                @endphp
+                                <span class="badge" style="background-color: {{ $statusColor }}; color: white;">
+                                    {{ ucfirst($section->status ?? 'active') }}
+                                </span>
                             </td>
                             <td>
-                                <a href="/admin/sections/{{ $section['id'] ?? '1' }}/edit" class="btn btn-sm btn-warning" title="Edit">
+                                <a href="/admin/sections/{{ $section->id ?? '1' }}/edit" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="/admin/sections/{{ $section['id'] ?? '1' }}/view" class="btn btn-sm btn-info" title="View Details">
+                                <a href="/admin/sections/{{ $section->id ?? '1' }}/view" class="btn btn-sm btn-info" title="View Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <button class="btn btn-sm btn-danger" onclick="confirmDelete('{{ $section['id'] ?? '1' }}')" title="Delete">
-                                    <i class="fas fa-trash"></i>
+                                <form action="/admin/sections/{{ $section->id }}" method="POST" style="display: inline;" onsubmit="return confirmDelete(event)">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
                                 </button>
                             </td>
                         </tr>
@@ -110,6 +192,10 @@
         background-color: var(--ojtms-light);
     }
 
+    .section-row.hidden {
+        display: none;
+    }
+
     .btn-warning {
         background-color: #f39c12;
         border: none;
@@ -134,15 +220,100 @@
         padding: 6px 12px;
         font-weight: 600;
     }
+
+    .form-select-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
 </style>
 
 <script>
-    function confirmDelete(id) {
-        if (confirm('Are you sure you want to delete this section?')) {
-            // Submit delete form
-            console.log('Deleting section: ' + id);
-            // In a real application, you would submit a deletion request here
+    function confirmDelete(event) {
+        event.preventDefault();
+        
+        if (confirm('Are you sure you want to delete this section? It will be moved to the archive and can be restored later.')) {
+            event.target.submit();
         }
+        return false;
     }
+
+    // Filter and Search Functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchName = document.getElementById('searchName');
+        const filterSchoolYear = document.getElementById('filterSchoolYear');
+        const filterTerm = document.getElementById('filterTerm');
+        const filterStatus = document.getElementById('filterStatus');
+        const sortBy = document.getElementById('sortBy');
+        const resetFilters = document.getElementById('resetFilters');
+        const tableBody = document.getElementById('sectionsTableBody');
+        const rows = document.querySelectorAll('.section-row');
+
+        function filterTable() {
+            const searchValue = searchName.value.toLowerCase();
+            const schoolYearValue = filterSchoolYear.value;
+            const termValue = filterTerm.value;
+            const statusValue = filterStatus.value;
+
+            rows.forEach(row => {
+                const name = row.getAttribute('data-name').toLowerCase();
+                const schoolYear = row.getAttribute('data-school-year');
+                const term = row.getAttribute('data-term');
+                const status = row.getAttribute('data-status');
+
+                let show = true;
+
+                if (searchValue && !name.includes(searchValue)) show = false;
+                if (schoolYearValue && schoolYear !== schoolYearValue) show = false;
+                if (termValue && term !== termValue) show = false;
+                if (statusValue && status !== statusValue) show = false;
+
+                row.classList.toggle('hidden', !show);
+            });
+        }
+
+        function sortTable() {
+            const sortValue = sortBy.value;
+            const rowsArray = Array.from(rows);
+
+            rowsArray.sort((a, b) => {
+                let aValue, bValue;
+
+                if (sortValue === 'name') {
+                    aValue = a.getAttribute('data-name');
+                    bValue = b.getAttribute('data-name');
+                } else if (sortValue === 'school_year') {
+                    aValue = a.getAttribute('data-school-year');
+                    bValue = b.getAttribute('data-school-year');
+                } else if (sortValue === 'term') {
+                    aValue = a.getAttribute('data-term');
+                    bValue = b.getAttribute('data-term');
+                } else if (sortValue === 'status') {
+                    aValue = a.getAttribute('data-status');
+                    bValue = b.getAttribute('data-status');
+                }
+
+                return aValue.localeCompare(bValue);
+            });
+
+            tableBody.innerHTML = '';
+            rowsArray.forEach(row => tableBody.appendChild(row));
+        }
+
+        // Event listeners
+        searchName.addEventListener('keyup', filterTable);
+        filterSchoolYear.addEventListener('change', filterTable);
+        filterTerm.addEventListener('change', filterTable);
+        filterStatus.addEventListener('change', filterTable);
+        sortBy.addEventListener('change', sortTable);
+
+        resetFilters.addEventListener('click', function() {
+            searchName.value = '';
+            filterSchoolYear.value = '';
+            filterTerm.value = '';
+            filterStatus.value = '';
+            sortBy.value = 'name';
+            rows.forEach(row => row.classList.remove('hidden'));
+        });
+    });
 </script>
 @endsection

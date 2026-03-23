@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Models\Section;
 
 Route::get('/', function () {
     return view('landing', [
@@ -33,34 +34,76 @@ Route::prefix('admin')->group(function () {
     
     // Sections Routes
     Route::get('/sections', function () {
-        return view('admin.sections.index', [
-            'sections' => [
-                ['id' => 1, 'code' => 'OJT-2025-001', 'school_year' => '2025-2026', 'term' => 'Term 1', 'day' => 'Monday', 'start_time' => '08:00', 'end_time' => '12:00', 'room' => 'Room 101', 'faculty' => 'Dr. Juan Dela Cruz', 'students_count' => 25],
-                ['id' => 2, 'code' => 'OJT-2025-002', 'school_year' => '2025-2026', 'term' => 'Term 1', 'day' => 'Wednesday', 'start_time' => '13:00', 'end_time' => '17:00', 'room' => 'Room 102', 'faculty' => 'Prof. Maria Santos', 'students_count' => 28],
-                ['id' => 3, 'code' => 'OJT-2025-003', 'school_year' => '2025-2026', 'term' => 'Term 2', 'day' => 'Friday', 'start_time' => '08:00', 'end_time' => '12:00', 'room' => 'Lab A', 'faculty' => 'Engr. Carlos Lopez', 'students_count' => 22],
-            ]
-        ]);
+        $sections = Section::all();
+        return view('admin.sections.index', ['sections' => $sections]);
     });
     
     Route::get('/sections/create', function () {
         return view('admin.sections.create');
     });
     
-    Route::post('/sections', function () {
+    Route::post('/sections', function (\Illuminate\Http\Request $request) {
+        Section::create([
+            'name' => $request->input('section_name'),
+            'school_year' => $request->input('school_year'),
+            'term' => $request->input('term'),
+            'day' => $request->input('day'),
+            'start_time' => $request->input('start_time'),
+            'end_time' => $request->input('end_time'),
+            'days_count' => $request->input('days_count'),
+            'room' => $request->input('room'),
+            'description' => $request->input('description'),
+            'status' => $request->input('status'),
+            'faculty_id' => $request->input('faculty_id') ?: null,
+            'capacity' => $request->input('capacity') ?: null,
+        ]);
         return redirect('/admin/sections')->with('success', 'Section created successfully!');
     });
     
+    Route::post('/sections/{id}', function ($id, \Illuminate\Http\Request $request) {
+        $section = Section::findOrFail($id);
+        $section->update([
+            'name' => $request->input('section_name'),
+            'school_year' => $request->input('school_year'),
+            'term' => $request->input('term'),
+            'day' => $request->input('day'),
+            'start_time' => $request->input('start_time'),
+            'end_time' => $request->input('end_time'),
+            'days_count' => $request->input('days_count'),
+            'room' => $request->input('room'),
+            'description' => $request->input('description'),
+            'status' => $request->input('status'),
+            'faculty_id' => $request->input('faculty_id') ?: null,
+            'capacity' => $request->input('capacity') ?: null,
+        ]);
+        return redirect('/admin/sections')->with('success', 'Section updated successfully!');
+    });
+    
     Route::get('/sections/{id}/edit', function ($id) {
-        $sections = [
-            1 => ['id' => 1, 'code' => 'OJT-2025-001', 'school_year' => '2025-2026', 'term' => 'Term 1', 'day' => 'Monday', 'start_time' => '08:00', 'end_time' => '12:00', 'room' => 'Room 101', 'faculty' => 'Dr. Juan Dela Cruz', 'faculty_id' => '1', 'capacity' => 30, 'days_count' => 1, 'description' => 'First batch OJT section', 'status' => 'Active'],
-        ];
-        $section = $sections[$id] ?? null;
+        $section = Section::findOrFail($id);
         return view('admin.sections.create', ['section' => $section]);
     });
     
     Route::get('/sections/{id}/view', function ($id) {
-        // View section details
-        return view('admin.sections.view', ['section' => []]);
+        $section = Section::findOrFail($id);
+        return view('admin.sections.view', ['section' => $section]);
+    });
+    
+    Route::delete('/sections/{id}', function ($id) {
+        $section = Section::findOrFail($id);
+        $section->delete();
+        return redirect('/admin/sections')->with('success', 'Section deleted and archived!');
+    });
+    
+    Route::get('/sections-archive', function () {
+        $deletedSections = Section::onlyTrashed()->get();
+        return view('admin.sections.archive', ['sections' => $deletedSections]);
+    });
+    
+    Route::post('/sections/{id}/restore', function ($id) {
+        $section = Section::withTrashed()->findOrFail($id);
+        $section->restore();
+        return redirect('/admin/sections-archive')->with('success', 'Section restored successfully!');
     });
     
     Route::get('/users', function () {
