@@ -16,6 +16,9 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-book"></i> Manage Sections</h2>
         <div>
+            <a href="/admin/faculty-assignment-audit" class="btn btn-warning me-2" title="Check for duplicate faculty assignments">
+                <i class="fas fa-stethoscope"></i> Faculty Audit
+            </a>
             <a href="/admin/sections-archive" class="btn btn-secondary me-2">
                 <i class="fas fa-archive"></i> Archived Sections
             </a>
@@ -121,16 +124,9 @@
                             </td>
                             <td>{{ $section->room ?? 'Room 101' }}</td>
                             <td>
-                                @php
-                                    $facultyNames = [
-                                        1 => 'Dr. Juan Dela Cruz',
-                                        2 => 'Prof. Maria Santos',
-                                        3 => 'Engr. Carlos Lopez'
-                                    ];
-                                @endphp
-                                @if($section->faculty_id && isset($facultyNames[$section->faculty_id]))
+                                @if($section->faculty)
                                     <span class="badge" style="background-color: var(--ojtms-primary); color: white;">
-                                        {{ $facultyNames[$section->faculty_id] }}
+                                        {{ $section->faculty->first_name . ' ' . $section->faculty->last_name }}
                                     </span>
                                 @else
                                     <em class="text-muted">--</em>

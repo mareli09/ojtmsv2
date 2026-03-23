@@ -29,20 +29,33 @@
                     <h5 class="mb-0"><i class="fas fa-user-tie"></i> Faculty Advisor</h5>
                 </div>
                 <div class="card-body">
-                    @php
-                        $facultyNames = [
-                            1 => 'Dr. Juan Dela Cruz',
-                            2 => 'Prof. Maria Santos',
-                            3 => 'Engr. Carlos Lopez'
-                        ];
-                    @endphp
-                    @if($section->faculty_id && isset($facultyNames[$section->faculty_id]))
-                        <h6 style="color: var(--ojtms-primary); font-weight: bold;">
-                            {{ $facultyNames[$section->faculty_id] }}
-                        </h6>
-                        <p class="text-muted small mb-0">Status: Assigned</p>
+                    @if($section->faculty)
+                        <div class="d-flex align-items-center mb-3">
+                            <div>
+                                <h6 style="color: var(--ojtms-primary); font-weight: bold; margin-bottom: 5px;">
+                                    {{ $section->faculty->first_name . ' ' . $section->faculty->last_name }}
+                                </h6>
+                                <p class="text-muted small mb-0">
+                                    <strong>Employee ID:</strong> {{ $section->faculty->employee_id ?? 'N/A' }}
+                                </p>
+                                <p class="text-muted small mb-0">
+                                    <strong>Department:</strong> {{ $section->faculty->department ?? 'N/A' }}
+                                </p>
+                                <p class="text-muted small mb-0">
+                                    <strong>Email:</strong> {{ $section->faculty->email ?? 'N/A' }}
+                                </p>
+                                <p class="text-muted small mb-0">
+                                    <strong>Contact:</strong> {{ $section->faculty->contact ?? 'N/A' }}
+                                </p>
+                                <span class="badge bg-success mt-2">
+                                    <i class="fas fa-check-circle"></i> Assigned
+                                </span>
+                            </div>
+                        </div>
                     @else
-                        <em class="text-muted">Not yet assigned</em>
+                        <em class="text-muted">
+                            <i class="fas fa-info-circle me-2"></i>Not yet assigned
+                        </em>
                         <p class="text-muted small mb-0">Will be assigned during registration</p>
                     @endif
                 </div>

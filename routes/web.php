@@ -39,11 +39,33 @@ Route::prefix('admin')->group(function () {
     });
     
     Route::get('/sections/create', function () {
-        return view('admin.sections.create');
+        // Get faculty users who aren't already assigned to a section
+        $availableFaculty = \App\Models\User::where('role', 'faculty')
+            ->where('deleted_at', null)
+            ->whereNotIn('id', \App\Models\Section::where('deleted_at', null)->whereNotNull('faculty_id')->pluck('faculty_id'))
+            ->get();
+        
+        return view('admin.sections.create', [
+            'availableFaculty' => $availableFaculty,
+            'hasFacultyAlert' => false
+        ]);
     });
     
     Route::post('/sections', function (\Illuminate\Http\Request $request) {
-        Section::create([
+        // Validate faculty isn't already assigned to another section
+        if ($request->filled('faculty_id')) {
+            $facultyId = $request->input('faculty_id');
+            
+            // Check if faculty is already assigned
+            if (\App\Models\Section::isFacultyAssigned($facultyId)) {
+                $existingSection = \App\Models\Section::getFacultySection($facultyId);
+                return back()->withErrors([
+                    'faculty_id' => "This faculty member is already assigned to section '{$existingSection->name}'. Please contact the admin to make changes."
+                ])->withInput();
+            }
+        }
+
+        $section = Section::create([
             'name' => $request->input('section_name'),
             'school_year' => $request->input('school_year'),
             'term' => $request->input('term'),
@@ -57,11 +79,34 @@ Route::prefix('admin')->group(function () {
             'faculty_id' => $request->input('faculty_id') ?: null,
             'capacity' => $request->input('capacity') ?: null,
         ]);
+        
+        // Sync faculty user's section_id
+        if ($request->filled('faculty_id')) {
+            $faculty = \App\Models\User::findOrFail($request->input('faculty_id'));
+            $faculty->update(['section_id' => $section->id]);
+        }
+        
         return redirect('/admin/sections')->with('success', 'Section created successfully!');
     });
     
     Route::post('/sections/{id}', function ($id, \Illuminate\Http\Request $request) {
         $section = Section::findOrFail($id);
+        $newFacultyId = $request->input('faculty_id');
+        $oldFacultyId = $section->faculty_id;
+        
+        // Check if faculty is being changed and if new faculty is already assigned elsewhere
+        if ($newFacultyId && $newFacultyId != $section->faculty_id) {
+            if (\App\Models\Section::isFacultyAssigned($newFacultyId, $id)) {
+                $existingSection = \App\Models\Section::where('faculty_id', $newFacultyId)
+                    ->where('id', '!=', $id)
+                    ->where('deleted_at', null)
+                    ->first();
+                return back()->withErrors([
+                    'faculty_id' => "This faculty member is already assigned to section '{$existingSection->name}'. Please contact the admin to make changes."
+                ])->withInput();
+            }
+        }
+        
         $section->update([
             'name' => $request->input('section_name'),
             'school_year' => $request->input('school_year'),
@@ -76,13 +121,48 @@ Route::prefix('admin')->group(function () {
             'faculty_id' => $request->input('faculty_id') ?: null,
             'capacity' => $request->input('capacity') ?: null,
         ]);
+        
+        // Sync faculty user's section_id
+        // If old faculty exists and is being removed, clear their section_id
+        if ($oldFacultyId && $oldFacultyId != $newFacultyId) {
+            $oldFaculty = \App\Models\User::find($oldFacultyId);
+            if ($oldFaculty) {
+                $oldFaculty->update(['section_id' => null]);
+            }
+        }
+        
+        // If new faculty is assigned, update their section_id
+        if ($newFacultyId) {
+            $newFaculty = \App\Models\User::findOrFail($newFacultyId);
+            $newFaculty->update(['section_id' => $section->id]);
+        }
+        
         return redirect('/admin/sections')->with('success', 'Section updated successfully!');
     });
     
     Route::get('/sections/{id}/edit', function ($id) {
         $section = Section::findOrFail($id);
-        return view('admin.sections.create', ['section' => $section]);
+        // Get faculty users who aren't assigned to another section (excluding the current section's faculty)
+        $availableFaculty = \App\Models\User::where('role', 'faculty')
+            ->where('deleted_at', null)
+            ->where(function ($query) use ($section) {
+                $query->whereNotIn('id', \App\Models\Section::where('deleted_at', null)->where('id', '!=', $section->id)->whereNotNull('faculty_id')->pluck('faculty_id'))
+                    ->orWhere('id', $section->faculty_id);
+            })
+            ->get();
+        
+        $facultyAssignedSection = null;
+        if ($section->faculty_id) {
+            $facultyAssignedSection = $section->faculty;
+        }
+        
+        return view('admin.sections.create', [
+            'section' => $section, 
+            'availableFaculty' => $availableFaculty,
+            'facultyAssignedSection' => $facultyAssignedSection
+        ]);
     });
+
     
     Route::get('/sections/{id}/view', function ($id) {
         $section = Section::findOrFail($id);
@@ -106,13 +186,315 @@ Route::prefix('admin')->group(function () {
         return redirect('/admin/sections-archive')->with('success', 'Section restored successfully!');
     });
     
-    Route::get('/users', function () {
-        return view('admin.users');
-    });
+    // User Management Routes
+    Route::get('/users', function (\Illuminate\Http\Request $request) {
+        $query = \App\Models\User::query();
+        
+        // Search filters
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('first_name', 'like', "%$search%")
+                  ->orWhere('last_name', 'like', "%$search%")
+                  ->orWhere('username', 'like', "%$search%")
+                  ->orWhere('email', 'like', "%$search%");
+            });
+        }
+        
+        if ($request->has('role') && $request->role) {
+            $query->where('role', $request->role);
+        }
+        
+        if ($request->has('status') && $request->status) {
+            $query->where('status', $request->status);
+        }
+        
+        if ($request->has('section') && $request->section) {
+            $query->where('section_id', $request->section);
+        }
+        
+        $users = $query->paginate(15);
+        $sections = \App\Models\Section::all();
+        
+        return view('admin.users.index', ['users' => $users, 'sections' => $sections]);
+    })->name('users.index');
     
     Route::get('/users/create', function () {
-        return view('admin.users.create');
-    });
+        $sections = \App\Models\Section::all();
+        return view('admin.users.create', ['sections' => $sections]);
+    })->name('users.create');
+    
+    Route::post('/users', function (\Illuminate\Http\Request $request) {
+        $validated = $request->validate([
+            'first_name' => 'required|string',
+            'last_name' => 'required|string',
+            'username' => 'required|string|unique:users',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|min:6',
+            'role' => 'required|in:admin,faculty,student',
+        ]);
+        
+        // Check if faculty is being assigned to a section with existing faculty
+        if ($request->input('role') === 'faculty' && $request->filled('section_id')) {
+            $section = Section::findOrFail($request->input('section_id'));
+            if ($section->faculty_id) {
+                return back()->withErrors([
+                    'section_id' => "Section '{$section->name}' already has a faculty member assigned. Please select a different section or contact the admin to make changes."
+                ])->withInput();
+            }
+        }
+        
+        $validated['password'] = bcrypt($validated['password']);
+        $validated['middle_name'] = $request->input('middle_name');
+        $validated['employee_id'] = $request->input('employee_id');
+        $validated['student_id'] = $request->input('student_id');
+        $validated['contact'] = $request->input('contact');
+        $validated['department'] = $request->input('department');
+        $validated['section_id'] = $request->input('section_id');
+        $validated['status'] = $request->input('status', 'active');
+        
+        $user = \App\Models\User::create($validated);
+        
+        // Synchronize section faculty if this is a faculty user
+        if ($request->input('role') === 'faculty' && $request->filled('section_id')) {
+            $section = Section::find($request->input('section_id'));
+            if ($section) {
+                $section->update(['faculty_id' => $user->id]);
+            }
+        }
+        
+        return redirect('/admin/users')->with('success', 'User created successfully!');
+    })->name('users.store');
+    
+    Route::get('/users/{id}/edit', function ($id) {
+        $user = \App\Models\User::findOrFail($id);
+        $sections = \App\Models\Section::all();
+        return view('admin.users.create', ['user' => $user, 'sections' => $sections]);
+    })->name('users.edit');
+    
+    Route::post('/users/{id}', function ($id, \Illuminate\Http\Request $request) {
+        $user = \App\Models\User::findOrFail($id);
+        
+        $validated = $request->validate([
+            'username' => 'required|string|unique:users,username,' . $id,
+            'email' => 'required|email|unique:users,email,' . $id,
+        ]);
+        
+        // Store old values before updating
+        $oldSectionId = $user->section_id;
+        $newSectionId = $request->input('section_id');
+        $isUserFaculty = $user->role === 'faculty';
+        
+        // Check if faculty is being assigned to a section
+        if ($isUserFaculty) {
+            // Only validate if section is changing
+            if ($newSectionId && $newSectionId != $oldSectionId) {
+                $section = Section::findOrFail($newSectionId);
+                if ($section->faculty_id && $section->faculty_id != $user->id) {
+                    return back()->withErrors([
+                        'section_id' => "Section '{$section->name}' already has a faculty member assigned. Please select a different section or contact the admin to make changes."
+                    ])->withInput();
+                }
+            }
+        }
+        
+        $validated['first_name'] = $request->input('first_name');
+        $validated['middle_name'] = $request->input('middle_name');
+        $validated['last_name'] = $request->input('last_name');
+        $validated['contact'] = $request->input('contact');
+        $validated['department'] = $request->input('department');
+        $validated['section_id'] = $request->input('section_id');
+        $validated['status'] = $request->input('status');
+        
+        if ($request->input('password')) {
+            $validated['password'] = bcrypt($request->input('password'));
+        }
+        
+        $user->update($validated);
+        
+        // Synchronize section faculty assignments if user is faculty
+        if ($isUserFaculty) {
+            // If faculty had a section before, remove faculty_id from old section
+            if ($oldSectionId && $oldSectionId != $newSectionId) {
+                $oldSection = Section::find($oldSectionId);
+                if ($oldSection && $oldSection->faculty_id == $user->id) {
+                    $oldSection->update(['faculty_id' => null]);
+                }
+            }
+            
+            // If faculty is assigned to a new section, set faculty_id in section
+            if ($newSectionId) {
+                $newSection = Section::find($newSectionId);
+                if ($newSection) {
+                    // Only set if not already set to this faculty
+                    if ($newSection->faculty_id != $user->id) {
+                        $newSection->update(['faculty_id' => $user->id]);
+                    }
+                }
+            }
+        }
+        
+        return redirect('/admin/users')->with('success', 'User updated successfully!');
+    })->name('users.update');
+    
+    Route::get('/users/{id}/view', function ($id) {
+        $user = \App\Models\User::findOrFail($id);
+        return view('admin.users.view', ['user' => $user]);
+    })->name('users.view');
+    
+    Route::delete('/users/{id}', function ($id) {
+        $user = \App\Models\User::findOrFail($id);
+        
+        // If this is a faculty user assigned to a section, clear the section's faculty_id
+        if ($user->role === 'faculty' && $user->section_id) {
+            $section = Section::find($user->section_id);
+            if ($section && $section->faculty_id == $user->id) {
+                $section->update(['faculty_id' => null]);
+            }
+        }
+        
+        $user->delete();
+        return redirect('/admin/users')->with('success', 'User archived!');
+    })->name('users.destroy');
+    
+    Route::get('/users-archive', function () {
+        $deletedUsers = \App\Models\User::onlyTrashed()->paginate(15);
+        return view('admin.users.archive', ['users' => $deletedUsers]);
+    })->name('users.archive');
+    
+    Route::post('/users/{id}/restore', function ($id) {
+        $user = \App\Models\User::withTrashed()->findOrFail($id);
+        $user->restore();
+        return redirect('/admin/users-archive')->with('success', 'User restored successfully!');
+    })->name('users.restore');
+    
+    Route::get('/users/bulk-import', function () {
+        return view('admin.users.bulk-import');
+    })->name('users.bulkImportForm');
+    
+    Route::get('/users/download-sample', function () {
+        $headers = ['Content-Type: text/csv; charset=utf-8', 'Content-Disposition: attachment; filename=users_sample.csv'];
+        $callback = function() {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['first_name', 'middle_name', 'last_name', 'username', 'email', 'password', 'role', 'employee_id', 'student_id', 'contact', 'department', 'section_id', 'status']);
+            fputcsv($handle, ['John', 'M', 'Doe', 'johndoe', 'john@example.com', 'password123', 'faculty', 'EMP001', '', '0912345678', 'IT', '1', 'active']);
+            fputcsv($handle, ['Jane', '', 'Smith', 'janesmith', 'jane@example.com', 'password123', 'student', '', 'STU001', '0987654321', '', '1', 'active']);
+            fclose($handle);
+        };
+        return response()->stream($callback, 200, $headers);
+    })->name('users.downloadSample');
+    
+    Route::post('/users/bulk-import', function (\Illuminate\Http\Request $request) {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt'
+        ]);
+        
+        $file = $request->file('file');
+        $handle = fopen($file->getPathname(), 'r');
+        $header = fgetcsv($handle);
+        $imported = 0;
+        $errors = [];
+        
+        while ($row = fgetcsv($handle)) {
+            try {
+                $data = array_combine($header, $row);
+                $data['password'] = bcrypt($data['password']);
+                \App\Models\User::create($data);
+                $imported++;
+            } catch (\Exception $e) {
+                $errors[] = 'Row error: ' . $e->getMessage();
+            }
+        }
+        
+        fclose($handle);
+        
+        return redirect('/admin/users')->with('success', "Imported $imported users successfully!");
+    })->name('users.bulkImport');
+    
+    // Faculty Assignment Management - Find and fix duplicate faculty in sections
+    Route::get('/faculty-assignment-audit', function () {
+        // Find all sections with multiple faculty members
+        $sectionsWithMultipleFaculty = \App\Models\Section::where('deleted_at', null)
+            ->with('faculty')
+            ->get()
+            ->filter(function($section) {
+                // Count faculty users assigned to this section
+                $facultyCount = \App\Models\User::where('role', 'faculty')
+                    ->where('section_id', $section->id)
+                    ->where('deleted_at', null)
+                    ->count();
+                return $facultyCount > 1;
+            });
+        
+        $duplicateData = [];
+        foreach ($sectionsWithMultipleFaculty as $section) {
+            $faculty = \App\Models\User::where('role', 'faculty')
+                ->where('section_id', $section->id)
+                ->where('deleted_at', null)
+                ->get();
+            
+            $duplicateData[] = [
+                'section' => $section,
+                'faculty' => $faculty,
+                'count' => $faculty->count()
+            ];
+        }
+        
+        return view('admin.faculty-assignment-audit', ['duplicates' => $duplicateData]);
+    })->name('faculty.audit');
+    
+    // Auto-fix: Keep only the first faculty, remove others from section
+    Route::post('/faculty-assignment-audit/fix/{sectionId}', function ($sectionId) {
+        $section = Section::findOrFail($sectionId);
+        
+        // Get all faculty in this section ordered by their assignment time (created_at)
+        $faculty = \App\Models\User::where('role', 'faculty')
+            ->where('section_id', $section->id)
+            ->where('deleted_at', null)
+            ->orderBy('created_at', 'asc')
+            ->get();
+        
+        if ($faculty->count() <= 1) {
+            return back()->with('info', 'No duplicates found for this section.');
+        }
+        
+        // Keep the first one and remove section assignment from the rest
+        $keepFaculty = $faculty->first();
+        $removeFaculty = $faculty->skip(1);
+        
+        foreach ($removeFaculty as $faculty_user) {
+            $faculty_user->update(['section_id' => null]);
+        }
+        
+        // Make sure section only has one faculty_id
+        $section->update(['faculty_id' => $keepFaculty->id]);
+        
+        return back()->with('success', "Fixed duplicate faculty assignment. Kept {$keepFaculty->first_name} {$keepFaculty->last_name}, removed others from section.");
+    })->name('faculty.fixDuplicate');
+    
+    // Manual fix: Select which faculty to keep
+    Route::post('/faculty-assignment-audit/fix-manual/{sectionId}', function ($sectionId, \Illuminate\Http\Request $request) {
+        $section = Section::findOrFail($sectionId);
+        $keepFacultyId = $request->input('keep_faculty_id');
+        
+        $keepFaculty = \App\Models\User::findOrFail($keepFacultyId);
+        
+        if ($keepFaculty->role !== 'faculty' || $keepFaculty->section_id !== $section->id) {
+            return back()->withErrors(['error' => 'Invalid faculty selection.']);
+        }
+        
+        // Remove section assignment from all other faculty in this section
+        \App\Models\User::where('role', 'faculty')
+            ->where('section_id', $section->id)
+            ->where('id', '!=', $keepFacultyId)
+            ->where('deleted_at', null)
+            ->update(['section_id' => null]);
+        
+        // Ensure section faculty_id is set to the kept faculty
+        $section->update(['faculty_id' => $keepFacultyId]);
+        
+        return back()->with('success', "Section assignment fixed. {$keepFaculty->first_name} {$keepFaculty->last_name} is now the only faculty for this section.");
+    })->name('faculty.fixDuplicateManual');
     
     Route::get('/cms', function () {
         return view('admin.cms');

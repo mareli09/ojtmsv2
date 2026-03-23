@@ -30,8 +30,38 @@ class Section extends Model
         'deleted_at' => 'datetime',
     ];
 
+    public function faculty()
+    {
+        return $this->belongsTo(User::class, 'faculty_id');
+    }
+
     public function students()
     {
         return $this->hasMany(Student::class);
+    }
+
+    /**
+     * Check if a faculty member is already assigned to another section
+     */
+    public static function isFacultyAssigned($facultyId, $excludeSectionId = null)
+    {
+        $query = self::where('deleted_at', null)
+            ->where('faculty_id', $facultyId);
+
+        if ($excludeSectionId) {
+            $query->where('id', '!=', $excludeSectionId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Get the section assigned to a faculty member
+     */
+    public static function getFacultySection($facultyId)
+    {
+        return self::where('deleted_at', null)
+            ->where('faculty_id', $facultyId)
+            ->first();
     }
 }

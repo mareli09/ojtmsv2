@@ -157,17 +157,45 @@
                             >{{ isset($section) ? $section->description : '' }}</textarea>
                         </div>
 
+                        <!-- Faculty Assignment Alert (if already assigned) -->
+                        @if(isset($section) && $section->faculty)
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Faculty Already Assigned:</strong>
+                            <br>
+                            <span class="ms-4">
+                                <strong>{{ $section->faculty->first_name . ' ' . $section->faculty->last_name }}</strong> ({{ $section->faculty->employee_id ?? 'N/A' }}) 
+                                is currently assigned to this section. 
+                                <br>
+                                <em>Each section can have only ONE faculty member. If you need to change the faculty member, please contact the admin.</em>
+                            </span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        @endif
+
                         <!-- Faculty Assignment -->
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="faculty_id" class="form-label">Assign Faculty (Optional)</label>
-                                <select class="form-select" id="faculty_id" name="faculty_id">
-                                    <option value="">-- To be assigned during registration --</option>
-                                    <option value="1" {{ (isset($section) && $section->faculty_id == 1) ? 'selected' : '' }}>Dr. Juan Dela Cruz</option>
-                                    <option value="2" {{ (isset($section) && $section->faculty_id == 2) ? 'selected' : '' }}>Prof. Maria Santos</option>
-                                    <option value="3" {{ (isset($section) && $section->faculty_id == 3) ? 'selected' : '' }}>Engr. Carlos Lopez</option>
+                                <select class="form-select @error('faculty_id') is-invalid @enderror" id="faculty_id" name="faculty_id">
+                                    <option value="">-- Not Assigned --</option>
+                                    @forelse($availableFaculty as $faculty)
+                                        <option value="{{ $faculty->id }}" {{ (isset($section) && $section->faculty_id == $faculty->id) ? 'selected' : '' }}>
+                                            {{ $faculty->first_name . ' ' . $faculty->last_name }} ({{ $faculty->employee_id ?? 'N/A' }})
+                                        </option>
+                                    @empty
+                                        <option disabled>No available faculty</option>
+                                    @endforelse
                                 </select>
-                                <small class="text-muted">Will be populated during registration phase</small>
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                                    <strong>Only ONE faculty per section allowed!</strong> If a faculty is already assigned to a section, they will not appear in this list.
+                                </small>
+                                @error('faculty_id')
+                                <div class="invalid-feedback d-block">
+                                    <i class="fas fa-times-circle me-1"></i> {{ $message }}
+                                </div>
+                                @enderror
                             </div>
                             <div class="col-md-6">
                                 <label for="capacity" class="form-label">Student Capacity (Optional)</label>

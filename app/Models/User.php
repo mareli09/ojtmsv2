@@ -4,12 +4,13 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -17,9 +18,20 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
-        'name',
-        'email',
+        'employee_id',
+        'student_id',
+        'role',
+        'first_name',
+        'middle_name',
+        'last_name',
+        'username',
         'password',
+        'email',
+        'contact',
+        'department',
+        'section_id',
+        'status',
+        'last_activity_at',
     ];
 
     /**
@@ -42,6 +54,27 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'last_activity_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Get the section associated with the user.
+     */
+    public function section()
+    {
+        return $this->belongsTo(Section::class);
+    }
+
+    /**
+     * Get the full name of the user.
+     */
+    public function getFullNameAttribute()
+    {
+        if ($this->middle_name) {
+            return $this->first_name . ' ' . $this->middle_name . ' ' . $this->last_name;
+        }
+        return $this->first_name . ' ' . $this->last_name;
     }
 }
