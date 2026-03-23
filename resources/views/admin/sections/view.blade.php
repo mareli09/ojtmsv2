@@ -65,14 +65,56 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-users"></i> Enrolled Students</h5>
-                    <span class="badge bg-primary">0</span>
+                    <span class="badge bg-primary">{{ $section->students->count() }}</span>
                 </div>
                 <div class="card-body">
-                    <div class="text-center py-4">
-                        <i class="fas fa-inbox text-muted" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                        <p class="text-muted mb-0">No students enrolled yet</p>
-                        <small class="text-muted">Students will be added during registration</small>
-                    </div>
+                    @if($section->students->count() > 0)
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Department</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($section->students as $student)
+                                    <tr>
+                                        <td>
+                                            <strong>{{ $student->student_id ?? 'N/A' }}</strong>
+                                        </td>
+                                        <td>
+                                            {{ $student->first_name . ' ' . $student->last_name }}
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">{{ $student->email }}</small>
+                                        </td>
+                                        <td>
+                                            {{ $student->department ?? '--' }}
+                                        </td>
+                                        <td>
+                                            @php
+                                                $statusColor = $student->status === 'active' ? '#27ae60' : '#e74c3c';
+                                            @endphp
+                                            <span class="badge" style="background-color: {{ $statusColor }}; color: white;">
+                                                {{ ucfirst($student->status) }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="text-center py-4">
+                            <i class="fas fa-inbox text-muted" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                            <p class="text-muted mb-0">No students enrolled yet</p>
+                            <small class="text-muted">Students will be added through User Management</small>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>

@@ -35,9 +35,23 @@ class Section extends Model
         return $this->belongsTo(User::class, 'faculty_id');
     }
 
+    /**
+     * Get enrolled students for this section
+     */
     public function students()
     {
-        return $this->hasMany(Student::class);
+        return $this->hasMany(User::class, 'section_id')
+            ->where('role', 'student')
+            ->where('deleted_at', null);
+    }
+
+    /**
+     * Get all users assigned to this section (including faculty and students)
+     */
+    public function enrolledUsers()
+    {
+        return $this->hasMany(User::class, 'section_id')
+            ->where('deleted_at', null);
     }
 
     /**
