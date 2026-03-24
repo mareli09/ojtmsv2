@@ -38,10 +38,32 @@
                     </thead>
                     <tbody>
                         @foreach($checklistItems as $index => $item)
+                        @php
+                            $entry = $entriesByItem[$item] ?? null;
+                            $status = $entry ? $entry->faculty_status : 'not submitted';
+                            $studentSubmitted = $entry && $entry->student_submitted_at;
+                            $statusColor = match($status) {
+                                'approved'  => 'success',
+                                'declined'  => 'danger',
+                                'pending'   => 'warning',
+                                default     => 'secondary',
+                            };
+                            $statusLabel = match($status) {
+                                'approved'     => 'Approved',
+                                'declined'     => 'Declined',
+                                'pending'      => $studentSubmitted ? 'Pending Review' : 'Not Submitted',
+                                default        => 'Not Submitted',
+                            };
+                        @endphp
                         <tr>
                             <td>{{ $index + 1 }}</td>
                             <td>{{ $item }}</td>
-                            <td>Pending</td>
+                            <td>
+                                <span class="badge bg-{{ $statusColor }}">{{ $statusLabel }}</span>
+                                @if($entry && $entry->student_submitted_at)
+                                <br><small class="text-muted">{{ $entry->student_submitted_at->format('M d, Y') }}</small>
+                                @endif
+                            </td>
                             <td>
                                 <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist/{{ urlencode($item) }}" class="btn btn-sm btn-warning">
                                     <i class="fas fa-edit"></i> Manage

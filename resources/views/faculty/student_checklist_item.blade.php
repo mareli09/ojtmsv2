@@ -14,324 +14,378 @@
 @endsection
 
 @section('content')
+@php
+    $recurringItems = ['DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
+    $isRecurring = in_array($item, $recurringItems);
+@endphp
+
 <div class="container-fluid">
-    <h2><i class="fas fa-clipboard-list"></i> Manage {{ $item }}</h2>
-    <p class="text-muted">
-        Student: {{ $student->first_name }} {{ $student->last_name }} | Section: {{ $section->name }}
-    </p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2><i class="fas fa-clipboard-list"></i> {{ $item }}</h2>
+            <p class="text-muted mb-0">
+                Student: <strong>{{ $student->first_name }} {{ $student->last_name }}</strong> |
+                Section: <strong>{{ $section->name }}</strong>
+            </p>
+        </div>
+        <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Checklist
+        </a>
+    </div>
+
+    @if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+
+    {{-- ===================== RECURRING ITEMS (DTR, Weekly Report, etc.) ===================== --}}
+    @if($isRecurring)
+
+        @if($entries->isEmpty())
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> No submissions yet for <strong>{{ $item }}</strong>.
+        </div>
+        @else
+
+        {{-- DTR summary bar --}}
+        @if($item === 'DTR')
+        @php
+            $approvedHours = $entries->where('faculty_status', 'approved')->sum('student_dtr_hours');
+            $targetHours   = $entries->first()?->faculty_dtr_target_hours ?? 720;
+            $pct           = $targetHours > 0 ? min(100, ($approvedHours / $targetHours) * 100) : 0;
+        @endphp
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Total Submissions</div>
+                        <div class="fs-4 fw-bold text-info">{{ $entries->count() }}</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Approved Hours</div>
+                        <div class="fs-4 fw-bold text-success">{{ $approvedHours }}</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Target Hours</div>
+                        <div class="fs-4 fw-bold text-primary">{{ $targetHours }}</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Remaining</div>
+                        <div class="fs-4 fw-bold text-{{ max(0, $targetHours - $approvedHours) > 0 ? 'warning' : 'success' }}">
+                            {{ max(0, $targetHours - $approvedHours) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="progress" style="height:18px;">
+                    <div class="progress-bar bg-success" style="width:{{ $pct }}%">{{ number_format($pct, 1) }}%</div>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        {{-- Submissions table --}}
+        <div class="card">
+            <div class="card-header">
+                All {{ $item }} Submissions ({{ $entries->count() }})
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            @if($item === 'DTR')
+                                <th>Week</th><th>Hours</th><th>Validated by</th>
+                            @elseif($item === 'Weekly report')
+                                <th>Week</th><th>Task Summary</th>
+                            @elseif($item === 'Monthly appraisal')
+                                <th>Month</th><th>Grade/Rating</th>
+                            @elseif($item === 'Supervisor evaluation')
+                                <th>Grade/Rating</th>
+                            @elseif($item === 'Certificate of completion')
+                                <th>Company</th><th>Date Issued</th>
+                            @endif
+                            <th>Submitted</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($entries as $i => $e)
+                        <tr>
+                            <td>{{ $i + 1 }}</td>
+                            @if($item === 'DTR')
+                                <td><strong>{{ $e->student_dtr_week ?? '—' }}</strong></td>
+                                <td><span class="badge bg-info">{{ $e->student_dtr_hours ?? 0 }} hrs</span></td>
+                                <td>{{ $e->student_dtr_validated_by ?? '—' }}</td>
+                            @elseif($item === 'Weekly report')
+                                <td><strong>{{ $e->student_weekly_week ?? '—' }}</strong></td>
+                                <td><small>{{ Str::limit($e->student_weekly_task_description ?? '—', 40) }}</small></td>
+                            @elseif($item === 'Monthly appraisal')
+                                <td><strong>{{ $e->student_appraisal_month ?? '—' }}</strong></td>
+                                <td>{{ $e->student_appraisal_grade_rating ?? '—' }}</td>
+                            @elseif($item === 'Supervisor evaluation')
+                                <td>{{ $e->student_supervisor_eval_grade ?? '—' }}</td>
+                            @elseif($item === 'Certificate of completion')
+                                <td>{{ $e->student_coc_company ?? '—' }}</td>
+                                <td>{{ $e->student_coc_date_issued ? \Carbon\Carbon::parse($e->student_coc_date_issued)->format('M d, Y') : '—' }}</td>
+                            @endif
+                            <td>{{ $e->student_submitted_at?->format('M d, Y') ?? '—' }}</td>
+                            <td>
+                                @php $sc = $e->faculty_status === 'approved' ? 'success' : ($e->faculty_status === 'declined' ? 'danger' : 'warning'); @endphp
+                                <span class="badge bg-{{ $sc }}">{{ ucfirst($e->faculty_status ?? 'pending') }}</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#reviewModal{{ $e->id }}">
+                                    <i class="fas fa-edit"></i> Review
+                                </button>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
+
+    {{-- ===================== ONE-TIME ITEMS ===================== --}}
+    @else
 
     <div class="card mb-3">
         <div class="card-body">
-            <p>This page shows submission details for <strong>{{ $item }}</strong> and allows faculty review.</p>
-            <p>
-                <strong>Submission encoded by student:</strong> {{ $entry->student_encoded_at?->format('Y-m-d H:i:s') ?? 'Not provided' }}<br>
-                <strong>Student submission date:</strong> {{ $entry->student_submitted_at?->format('Y-m-d H:i:s') ?? 'Not submitted yet' }}
+            <p><strong>Submitted:</strong> {{ $entry?->student_submitted_at?->format('M d, Y g:i A') ?? 'Not submitted yet' }}</p>
+            <p><strong>Status:</strong>
+                <span class="badge bg-{{ ($entry?->faculty_status ?? '') == 'approved' ? 'success' : (($entry?->faculty_status ?? '') == 'declined' ? 'danger' : 'secondary') }}">
+                    {{ ucfirst($entry?->faculty_status ?? 'pending') }}
+                </span>
             </p>
-            <p>
-                <strong>Student remarks:</strong><br>
-                {{ $entry->student_remarks ?? 'No remarks yet.' }}
-            </p>
-            <p>
-                <strong>Current status:</strong>
-                <span class="badge bg-{{ $entry->faculty_status == 'approved' ? 'success' : ($entry->faculty_status == 'declined' ? 'danger' : 'secondary') }}">{{ ucfirst($entry->faculty_status) }}</span>
-            </p>
-            <p>
-                <strong>Faculty remarks:</strong><br>
-                {{ $entry->faculty_remarks ?? 'Not set yet.' }}
-            </p>
+            @if($entry?->student_remarks)
+            <p><strong>Student remarks:</strong> {{ $entry->student_remarks }}</p>
+            @endif
+            @if($entry?->faculty_remarks)
+            <p><strong>Faculty remarks:</strong> {{ $entry->faculty_remarks }}</p>
+            @endif
 
-            @if(in_array($item, ['Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA', 'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion']))
-                <hr>
-                <p><strong>Student enrollment encoded date:</strong> {{ $entry->student_encoded_at?->format('Y-m-d H:i:s') ?? 'Not encoded yet' }}</p>
-                <p><strong>Student submission date:</strong> {{ $entry->student_submitted_at?->format('Y-m-d H:i:s') ?? 'Not submitted yet' }}</p>
-                <p><strong>Submission status:</strong> {{ ucfirst($entry->student_submission_status ?? 'pending') }}</p>
+            <hr>
 
-                @if($item === 'Medical Record')
-                    <p><strong>Clinic/Hospital name:</strong> {{ $entry->student_clinic_name ?? 'Not provided' }}</p>
-                    <p><strong>Clinic/Hospital address:</strong> {{ $entry->student_clinic_address ?? 'Not provided' }}</p>
-                    <p><strong>Uploaded medical files:</strong></p>
-                @elseif($item === 'Receipt of OJT Kit')
-                    <p><strong>Receipt paid date:</strong> {{ $entry->student_paid_date?->format('Y-m-d') ?? 'Not provided' }}</p>
-                    <p><strong>Receipt reference number:</strong> {{ $entry->student_receipt_number ?? 'Not provided' }}</p>
-                    <p><strong>Uploaded receipt file(s):</strong></p>
-                @elseif($item === 'Waiver')
-                    <p><strong>Guardian name:</strong> {{ $entry->student_guardian_name ?? 'Not provided' }}</p>
-                    <p><strong>Guardian contact number:</strong> {{ $entry->student_guardian_contact ?? 'Not provided' }}</p>
-                    <p><strong>Guardian email:</strong> {{ $entry->student_guardian_email ?? 'Not provided' }}</p>
-                    <p><strong>Guardian social link:</strong> {{ $entry->student_guardian_social ?? 'Not provided' }}</p>
-                    <p><strong>Uploaded waiver file(s):</strong></p>
-                @elseif($item === 'Endorsement letter')
-                    <p><strong>Endorsement date:</strong> {{ $entry->student_endorsement_date?->format('Y-m-d') ?? 'Not provided' }}</p>
-                    <p><strong>Start date:</strong> {{ $entry->student_start_date?->format('Y-m-d') ?? 'Not provided' }}</p>
-                    <p><strong>Supervisor signed by:</strong> {{ $entry->student_supervisor_signed_by ?? 'Not provided' }}</p>
-                    <p><strong>Uploaded endorsement file(s):</strong></p>
-                @elseif($item === 'MOA')
-                    <div class="alert alert-info">
-                        <p><i class="fas fa-info-circle"></i> <strong>Note:</strong> MOA may have multiple signings and submissions (milestones) before final completion.</p>
-                    </div>
-                    <p><strong>Student remarks:</strong> {{ $entry->student_remarks ?? 'None' }}</p>
-                    <p><strong>Uploaded MOA file(s) for this submission:</strong></p>
-                @elseif($item === 'DTR')
-                    <div class="alert alert-info">
-                        <p><i class="fas fa-info-circle"></i> <strong>Daily Time Record (DTR):</strong> Student submits weekly hours worked with supervisor validation.</p>
-                    </div>
-                    <p><strong>Week:</strong> {{ $entry->student_dtr_week ?? 'Not specified' }}</p>
-                    <p><strong>Hours encoded:</strong> {{ $entry->student_dtr_hours ?? 'Not encoded' }} hours</p>
-                    <p><strong>Validated by (Supervisor):</strong> {{ $entry->student_dtr_validated_by ?? 'Not specified' }}</p>
-                    <p><strong>Total hours submitted so far:</strong> {{ $entry->student_dtr_total_hours ?? 0 }} hours</p>
-                    <p><strong>Target hours (editable by faculty):</strong> <strong class="text-primary">{{ $entry->faculty_dtr_target_hours ?? 720 }}</strong> hours</p>
-                    <p>
-                        <strong class="text-{{ $entry->student_dtr_total_hours >= ($entry->faculty_dtr_target_hours ?? 720) ? 'success' : 'warning' }}">
-                            Remaining hours: {{ max(0, ($entry->faculty_dtr_target_hours ?? 720) - ($entry->student_dtr_total_hours ?? 0)) }}
-                        </strong>
-                    </p>
-                    <p><strong>Student remarks:</strong> {{ $entry->student_remarks ?? 'None' }}</p>
-                @elseif($item === 'Weekly report')
-                    <div class="alert alert-info">
-                        <p><i class="fas fa-info-circle"></i> <strong>Weekly Report:</strong> Student submits weekly task completed, supervisor feedback, and supporting documents.</p>
-                    </div>
-                    <p><strong>Week:</strong> {{ $entry->student_weekly_week ?? 'Not specified' }}</p>
-                    <p><strong>Task Description:</strong></p>
-                    <blockquote class="blockquote bg-light p-3 rounded">
-                        {{ $entry->student_weekly_task_description ?? 'Not provided' }}
-                    </blockquote>
-                    <p><strong>Supervisor Feedback:</strong></p>
-                    <blockquote class="blockquote bg-light p-3 rounded">
-                        {{ $entry->student_weekly_supervisor_feedback ?? 'Not provided' }}
-                    </blockquote>
-                    <p><strong>Submitted on:</strong> {{ $entry->student_weekly_submitted_at?->format('M d, Y @ H:i') ?? 'Not submitted yet' }}</p>
-                    <p><strong>Uploaded weekly report file(s):</strong></p>
-                @elseif($item === 'Monthly appraisal')
-                    <div class="alert alert-info">
-                        <p><i class="fas fa-info-circle"></i> <strong>Monthly Appraisal:</strong> Student performance evaluation submitted monthly with feedback, grade/rating, and supporting documents.</p>
-                    </div>
-                    <p><strong>Month:</strong> {{ $entry->student_appraisal_month ?? 'Not specified' }}</p>
-                    <p><strong>Feedback (Optional):</strong></p>
-                    @if($entry->student_appraisal_feedback)
-                        <blockquote class="blockquote bg-light p-3 rounded">
-                            {{ $entry->student_appraisal_feedback }}
-                        </blockquote>
-                    @else
-                        <p class="text-muted">Not provided</p>
-                    @endif
-                    <p><strong>Grade/Rating (Optional):</strong> {{ $entry->student_appraisal_grade_rating ?? 'Not provided' }}</p>
-                    <p><strong>Evaluated by:</strong> {{ $entry->student_appraisal_evaluated_by ?? 'Not specified' }}</p>
-                    <p><strong>Submitted on:</strong> {{ $entry->student_appraisal_submitted_at?->format('M d, Y @ H:i') ?? 'Not submitted yet' }}</p>
-                    <p><strong>Uploaded appraisal file:</strong></p>
-                @elseif($item === 'Supervisor evaluation')
-                    <div class="alert alert-info">
-                        <p><i class="fas fa-info-circle"></i> <strong>Supervisor Evaluation:</strong> Supervisor evaluation with required grade/rating and evaluation document.</p>
-                    </div>
-                    <p><strong>Grade/Rating:</strong> {{ $entry->student_supervisor_eval_grade ?? 'Not provided' }}</p>
-                    <p><strong>Submitted on:</strong> {{ $entry->student_supervisor_eval_submitted_at?->format('M d, Y @ H:i') ?? 'Not submitted yet' }}</p>
-                    <p><strong>Uploaded evaluation file:</strong></p>
-                @elseif($item === 'Certificate of completion')
-                    <div class="alert alert-info">
-                        <p><i class="fas fa-info-circle"></i> <strong>Certificate of Completion:</strong> Certificate issued by the company after completing the OJT.</p>
-                    </div>
-                    <p><strong>Company:</strong> {{ $entry->student_coc_company ?? 'Not provided' }}</p>
-                    <p><strong>Signed by:</strong> {{ $entry->student_coc_signed_by ?? 'Not provided' }}</p>
-                    <p><strong>COC date issued:</strong> {{ $entry->student_coc_date_issued ? \Carbon\Carbon::parse($entry->student_coc_date_issued)->format('M d, Y') : 'Not provided' }}</p>
-                    <p><strong>Receive / Revise date:</strong> {{ $entry->student_coc_receive_date ? \Carbon\Carbon::parse($entry->student_coc_receive_date)->format('M d, Y') : 'Not provided' }}</p>
-                    <p><strong>Submitted on:</strong> {{ $entry->student_coc_submitted_at ? \Carbon\Carbon::parse($entry->student_coc_submitted_at)->format('M d, Y @ H:i') : 'Not submitted yet' }}</p>
-                    <p><strong>Uploaded COC file:</strong></p>
-                @endif
+            @if($item === 'Registration card')
+                <p><strong>Uploaded file:</strong></p>
+                @if($entry?->student_file)
+                    <a href="{{ route('file.download', ['path' => $entry->student_file]) }}" target="_blank">{{ basename($entry->student_file) }}</a>
+                @else <p class="text-muted">No file uploaded.</p> @endif
 
-                @if($item === 'Supervisor evaluation')
-                    @if($entry->student_supervisor_eval_file)
-                        <ul>
-                            <li><a href="/storage/{{ ltrim($entry->student_supervisor_eval_file, '/') }}" target="_blank">{{ basename($entry->student_supervisor_eval_file) }}</a></li>
-                        </ul>
-                    @else
-                        <p class="text-muted">No file uploaded.</p>
-                    @endif
-                @elseif($item === 'Certificate of completion')
-                    @if($entry->student_coc_file)
-                        <ul>
-                            <li><a href="/storage/{{ ltrim($entry->student_coc_file, '/') }}" target="_blank">{{ basename($entry->student_coc_file) }}</a></li>
-                        </ul>
-                    @else
-                        <p class="text-muted">No file uploaded.</p>
-                    @endif
-                @elseif($entry->student_files && count($entry->student_files) > 0)
-                    <ul>
-                        @foreach($entry->student_files as $file)
-                            <li><a href="/{{ ltrim($file, '/') }}" target="_blank">{{ basename($file) }}</a></li>
-                        @endforeach
-                    </ul>
-                @elseif($entry->student_file)
-                    <ul>
-                        <li><a href="/{{ ltrim($entry->student_file, '/') }}" target="_blank">{{ basename($entry->student_file) }}</a></li>
-                    </ul>
-                @else
-                    <p class="text-muted">No file uploaded.</p>
-                @endif
+            @elseif($item === 'Medical Record')
+                <p><strong>Clinic/Hospital:</strong> {{ $entry?->student_clinic_name ?? '—' }}, {{ $entry?->student_clinic_address ?? '—' }}</p>
+                <p><strong>Files:</strong></p>
+                @if($entry?->student_files && count($entry->student_files) > 0)
+                    <ul>@foreach($entry->student_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @else <p class="text-muted">No files uploaded.</p> @endif
+
+            @elseif($item === 'Receipt of OJT Kit')
+                <p><strong>Date Paid:</strong> {{ $entry?->student_paid_date?->format('M d, Y') ?? '—' }}</p>
+                <p><strong>OR/Reference Number:</strong> {{ $entry?->student_receipt_number ?? '—' }}</p>
+                <p><strong>Files:</strong></p>
+                @if($entry?->student_files && count($entry->student_files) > 0)
+                    <ul>@foreach($entry->student_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @else <p class="text-muted">No files uploaded.</p> @endif
+
+            @elseif($item === 'Waiver')
+                <p><strong>Guardian:</strong> {{ $entry?->student_guardian_name ?? '—' }} | {{ $entry?->student_guardian_contact ?? '—' }}</p>
+                @if($entry?->student_guardian_email)<p><strong>Email:</strong> {{ $entry->student_guardian_email }}</p>@endif
+                <p><strong>Files:</strong></p>
+                @if($entry?->student_files && count($entry->student_files) > 0)
+                    <ul>@foreach($entry->student_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @else <p class="text-muted">No files uploaded.</p> @endif
+
+            @elseif($item === 'Endorsement letter')
+                <p><strong>Endorsement Date:</strong> {{ $entry?->student_endorsement_date?->format('M d, Y') ?? '—' }}</p>
+                <p><strong>OJT Start Date:</strong> {{ $entry?->student_start_date?->format('M d, Y') ?? '—' }}</p>
+                <p><strong>Signed by:</strong> {{ $entry?->student_supervisor_signed_by ?? '—' }}</p>
+                <p><strong>Files:</strong></p>
+                @if($entry?->student_files && count($entry->student_files) > 0)
+                    <ul>@foreach($entry->student_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @else <p class="text-muted">No files uploaded.</p> @endif
+
+            @elseif($item === 'MOA')
+                <p><strong>Student remarks:</strong> {{ $entry?->student_remarks ?? 'None' }}</p>
+                <p><strong>Files:</strong></p>
+                @if($entry?->student_files && count($entry->student_files) > 0)
+                    <ul>@foreach($entry->student_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @else <p class="text-muted">No files uploaded.</p> @endif
+
             @else
-                @if($entry->student_file)
-                    <p><strong>Student file:</strong> <a href="/{{ ltrim($entry->student_file, '/') }}" target="_blank">View Upload</a></p>
-                @else
-                    <p class="text-muted"><em>No student file has been uploaded yet.</em></p>
-                @endif
+                @if($entry?->student_file)
+                    <p><a href="{{ route('file.download', ['path' => $entry->student_file]) }}" target="_blank">View Upload</a></p>
+                @else <p class="text-muted">No file uploaded.</p> @endif
             @endif
         </div>
     </div>
 
-    @if(session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
-    @endif
-
+    {{-- One-time item review form --}}
     <form method="POST" action="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist/{{ urlencode($item) }}">
         @csrf
-        
-        @if($item === 'DTR')
-            <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Faculty Review - DTR</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Edit Target Hours (Total OJT requirement)</label>
-                        <div class="input-group">
-                            <input type="number" name="faculty_dtr_target_hours" class="form-control" step="0.01" 
-                                value="{{ old('faculty_dtr_target_hours', $entry->faculty_dtr_target_hours ?? 720) }}" required>
-                            <span class="input-group-text">hours</span>
-                        </div>
-                        <small class="form-text text-muted">Default is 720 hours. Adjust based on student requirements.</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Faculty status</label>
-                        <select name="faculty_status" class="form-select" required>
-                            <option value="pending" {{ $entry->faculty_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                            <option value="approved" {{ $entry->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
-                            <option value="declined" {{ $entry->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
-                        </select>
-                        <small class="form-text text-muted">Approve: Valid DTR entry | Declined: Missing info or invalid hours</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Faculty remarks (required if declined)</label>
-                        <textarea name="faculty_remarks" class="form-control" rows="4" 
-                            placeholder="e.g., 'Missing supervisor validation', 'Hours exceed daily limit', etc.">{{ old('faculty_remarks', $entry->faculty_remarks) }}</textarea>
-                    </div>
-                </div>
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Faculty Review</h5>
             </div>
-        @elseif($item === 'Weekly report')
-            <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Faculty Review - Weekly Report</h5>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Status</label>
+                    <select name="faculty_status" class="form-select" required>
+                        <option value="pending"  {{ ($entry?->faculty_status ?? '') == 'pending'  ? 'selected' : '' }}>Pending</option>
+                        <option value="approved" {{ ($entry?->faculty_status ?? '') == 'approved' ? 'selected' : '' }}>Approved</option>
+                        <option value="declined" {{ ($entry?->faculty_status ?? '') == 'declined' ? 'selected' : '' }}>Declined</option>
+                    </select>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Faculty status</label>
-                        <select name="faculty_status" class="form-select" required>
-                            <option value="pending" {{ $entry->faculty_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                            <option value="approved" {{ $entry->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
-                            <option value="declined" {{ $entry->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
-                        </select>
-                        <small class="form-text text-muted">Approve: Quality report | Declined: Incomplete or needs revision</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Faculty remarks and feedback</label>
-                        <textarea name="faculty_weekly_remarks" class="form-control" rows="4" 
-                            placeholder="Provide feedback on the weekly report, task completion, or areas for improvement.">{{ old('faculty_weekly_remarks', $entry->faculty_weekly_remarks) }}</textarea>
-                        <small class="form-text text-muted">Required if declined. Recommended for all submissions to guide student improvement.</small>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label">Remarks (required if declined)</label>
+                    <textarea name="faculty_remarks" class="form-control" rows="4"
+                        placeholder="Add feedback or reason for declining...">{{ old('faculty_remarks', $entry?->faculty_remarks) }}</textarea>
+                    @error('faculty_remarks')<div class="text-danger small">{{ $message }}</div>@enderror
                 </div>
+                <button type="submit" class="btn btn-success"><i class="fas fa-check-circle"></i> Save Review</button>
+                <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist" class="btn btn-secondary">Cancel</a>
             </div>
-        @elseif($item === 'Monthly appraisal')
-            <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Faculty Review - Monthly Appraisal</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Faculty status</label>
-                        <select name="faculty_status" class="form-select" required>
-                            <option value="pending" {{ $entry->faculty_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                            <option value="approved" {{ $entry->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
-                            <option value="declined" {{ $entry->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
-                        </select>
-                        <small class="form-text text-muted">Approve: Acceptable appraisal | Declined: Incomplete or needs revision</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Faculty remarks and feedback</label>
-                        <textarea name="faculty_appraisal_remarks" class="form-control" rows="4" 
-                            placeholder="Provide feedback on the appraisal submission, overall performance assessment, or areas for improvement.">{{ old('faculty_appraisal_remarks', $entry->faculty_appraisal_remarks) }}</textarea>
-                        <small class="form-text text-muted">Required if declined. Provide constructive feedback for the student's development.</small>
-                    </div>
-                </div>
-            </div>
-        @elseif($item === 'Supervisor evaluation')
-            <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Faculty Review - Supervisor Evaluation</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Faculty status</label>
-                        <select name="faculty_status" class="form-select" required>
-                            <option value="pending" {{ $entry->faculty_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                            <option value="approved" {{ $entry->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
-                            <option value="declined" {{ $entry->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
-                        </select>
-                        <small class="form-text text-muted">Approve: Acceptable evaluation | Declined: Incomplete or needs revision</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Faculty remarks and feedback</label>
-                        <textarea name="faculty_supervisor_eval_remarks" class="form-control" rows="4"
-                            placeholder="Provide feedback on the supervisor evaluation or results.">{{ old('faculty_supervisor_eval_remarks', $entry->faculty_supervisor_eval_remarks) }}</textarea>
-                        <small class="form-text text-muted">Required if declined. Provide constructive feedback for student improvement.</small>
-                    </div>
-                </div>
-            </div>
-        @elseif($item === 'Certificate of completion')
-            <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Faculty Review - Certificate of Completion</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Faculty status</label>
-                        <select name="faculty_status" class="form-select" required>
-                            <option value="pending" {{ $entry->faculty_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                            <option value="approved" {{ $entry->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
-                            <option value="declined" {{ $entry->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
-                        </select>
-                        <small class="form-text text-muted">Approve: Valid COC | Declined: Incomplete or needs revision</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Faculty remarks and feedback</label>
-                        <textarea name="faculty_coc_remarks" class="form-control" rows="4"
-                            placeholder="Provide feedback on the certificate of completion.">{{ old('faculty_coc_remarks', $entry->faculty_coc_remarks) }}</textarea>
-                        <small class="form-text text-muted">Required if declined. Provide reason or additional notes.</small>
-                    </div>
-                </div>
-            </div>
-        @else
-            <div class="mb-3">
-                <label class="form-label">Faculty status</label>
-                <select name="faculty_status" class="form-select" required>
-                    <option value="pending" {{ $entry->faculty_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                    <option value="approved" {{ $entry->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
-                    <option value="declined" {{ $entry->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Faculty remarks (required if declined)</label>
-                <textarea name="faculty_remarks" class="form-control" rows="4" placeholder="Add a reason or additional notes">{{ old('faculty_remarks', $entry->faculty_remarks) }}</textarea>
-            </div>
-        @endif
-
-        <div class="mb-3">
-            <button type="submit" class="btn btn-success"><i class="fas fa-check-circle"></i> Save Review</button>
-            <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to student list</a>
         </div>
     </form>
+
+    @endif {{-- end one-time items --}}
 </div>
+
+{{-- Per-entry review modals for recurring items (outside container) --}}
+@if($isRecurring)
+@foreach($entries as $e)
+<div class="modal fade" id="reviewModal{{ $e->id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Review {{ $item }}
+                    @if($item === 'DTR') — {{ $e->student_dtr_week }}
+                    @elseif($item === 'Weekly report') — {{ $e->student_weekly_week }}
+                    @elseif($item === 'Monthly appraisal') — {{ $e->student_appraisal_month }}
+                    @endif
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                {{-- Entry details --}}
+                @if($item === 'DTR')
+                <div class="row mb-2">
+                    <div class="col-md-4"><strong>Week:</strong> {{ $e->student_dtr_week ?? '—' }}</div>
+                    <div class="col-md-4"><strong>Hours:</strong> {{ $e->student_dtr_hours ?? 0 }} hrs</div>
+                    <div class="col-md-4"><strong>Validated by:</strong> {{ $e->student_dtr_validated_by ?? '—' }}</div>
+                </div>
+                @if($e->student_remarks)<p><strong>Remarks:</strong> {{ $e->student_remarks }}</p>@endif
+                @if(!empty($e->student_files))
+                <p><strong>Files:</strong></p>
+                <ul>@foreach($e->student_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @endif
+                <p><strong>Submitted:</strong> {{ $e->student_submitted_at?->format('M d, Y g:i A') ?? '—' }}</p>
+
+                @elseif($item === 'Weekly report')
+                <p><strong>Week:</strong> {{ $e->student_weekly_week ?? '—' }}</p>
+                <p><strong>Submitted:</strong> {{ $e->student_weekly_submitted_at?->format('M d, Y g:i A') ?? '—' }}</p>
+                <h6>Task Description:</h6>
+                <div class="bg-light p-2 rounded mb-2">{{ $e->student_weekly_task_description ?? 'Not provided' }}</div>
+                <h6>Supervisor Feedback:</h6>
+                <div class="bg-light p-2 rounded mb-2">{{ $e->student_weekly_supervisor_feedback ?? 'Not provided' }}</div>
+                @if(!empty($e->student_weekly_files))
+                <p><strong>Files:</strong></p>
+                <ul>@foreach($e->student_weekly_files as $f)<li><a href="{{ route('file.download', ['path' => $f]) }}" target="_blank">{{ basename($f) }}</a></li>@endforeach</ul>
+                @endif
+
+                @elseif($item === 'Monthly appraisal')
+                <div class="row mb-2">
+                    <div class="col-md-6"><strong>Month:</strong> {{ $e->student_appraisal_month ?? '—' }}</div>
+                    <div class="col-md-6"><strong>Grade/Rating:</strong> {{ $e->student_appraisal_grade_rating ?? '—' }}</div>
+                </div>
+                <p><strong>Evaluated by:</strong> {{ $e->student_appraisal_evaluated_by ?? '—' }}</p>
+                @if($e->student_appraisal_feedback)<div class="bg-light p-2 rounded mb-2">{{ $e->student_appraisal_feedback }}</div>@endif
+                @if($e->student_appraisal_file)<p><strong>File:</strong> <a href="{{ route('file.download', ['path' => $e->student_appraisal_file]) }}" target="_blank">{{ basename($e->student_appraisal_file) }}</a></p>@endif
+
+                @elseif($item === 'Supervisor evaluation')
+                <p><strong>Grade/Rating:</strong> {{ $e->student_supervisor_eval_grade ?? '—' }}</p>
+                <p><strong>Submitted:</strong> {{ $e->student_supervisor_eval_submitted_at?->format('M d, Y g:i A') ?? '—' }}</p>
+                @if($e->student_supervisor_eval_file)<p><strong>File:</strong> <a href="{{ route('file.download', ['path' => $e->student_supervisor_eval_file]) }}" target="_blank">{{ basename($e->student_supervisor_eval_file) }}</a></p>@endif
+
+                @elseif($item === 'Certificate of completion')
+                <div class="row mb-2">
+                    <div class="col-md-6"><strong>Company:</strong> {{ $e->student_coc_company ?? '—' }}</div>
+                    <div class="col-md-6"><strong>Signed by:</strong> {{ $e->student_coc_signed_by ?? '—' }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-6"><strong>Date Issued:</strong> {{ $e->student_coc_date_issued ? \Carbon\Carbon::parse($e->student_coc_date_issued)->format('M d, Y') : '—' }}</div>
+                    <div class="col-md-6"><strong>Receive Date:</strong> {{ $e->student_coc_receive_date ? \Carbon\Carbon::parse($e->student_coc_receive_date)->format('M d, Y') : '—' }}</div>
+                </div>
+                @if($e->student_coc_file)<p><strong>File:</strong> <a href="{{ route('file.download', ['path' => $e->student_coc_file]) }}" target="_blank">{{ basename($e->student_coc_file) }}</a></p>@endif
+                @endif
+
+                <hr>
+
+                {{-- Review form --}}
+                <form method="POST" action="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist/{{ urlencode($item) }}/{{ $e->id }}">
+                    @csrf
+                    @if($item === 'DTR')
+                    <div class="mb-3">
+                        <label class="form-label">Target Hours</label>
+                        <div class="input-group">
+                            <input type="number" name="faculty_dtr_target_hours" class="form-control" step="0.5"
+                                value="{{ $e->faculty_dtr_target_hours ?? 720 }}">
+                            <span class="input-group-text">hours</span>
+                        </div>
+                    </div>
+                    @endif
+
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select name="faculty_status" class="form-select" required>
+                            <option value="pending"  {{ $e->faculty_status == 'pending'  ? 'selected' : '' }}>Pending</option>
+                            <option value="approved" {{ $e->faculty_status == 'approved' ? 'selected' : '' }}>Approved</option>
+                            <option value="declined" {{ $e->faculty_status == 'declined' ? 'selected' : '' }}>Declined</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            @if($item === 'Weekly report') Faculty Feedback
+                            @elseif($item === 'Monthly appraisal') Faculty Feedback
+                            @elseif($item === 'Supervisor evaluation') Faculty Remarks
+                            @elseif($item === 'Certificate of completion') Faculty Remarks
+                            @else Faculty Remarks
+                            @endif
+                            <small class="text-muted">(required if declined)</small>
+                        </label>
+                        @if($item === 'Weekly report')
+                        <textarea name="faculty_weekly_remarks" class="form-control" rows="3"
+                            placeholder="Provide feedback...">{{ $e->faculty_weekly_remarks }}</textarea>
+                        @elseif($item === 'Monthly appraisal')
+                        <textarea name="faculty_appraisal_remarks" class="form-control" rows="3"
+                            placeholder="Provide feedback...">{{ $e->faculty_appraisal_remarks }}</textarea>
+                        @elseif($item === 'Supervisor evaluation')
+                        <textarea name="faculty_supervisor_eval_remarks" class="form-control" rows="3"
+                            placeholder="Provide remarks...">{{ $e->faculty_supervisor_eval_remarks }}</textarea>
+                        @elseif($item === 'Certificate of completion')
+                        <textarea name="faculty_coc_remarks" class="form-control" rows="3"
+                            placeholder="Provide remarks...">{{ $e->faculty_coc_remarks }}</textarea>
+                        @else
+                        <textarea name="faculty_remarks" class="form-control" rows="3"
+                            placeholder="Add remarks...">{{ $e->faculty_remarks }}</textarea>
+                        @endif
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success"><i class="fas fa-check-circle"></i> Save Review</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endforeach
+@endif
+
 @endsection

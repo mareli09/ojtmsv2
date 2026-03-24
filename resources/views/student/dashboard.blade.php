@@ -1,16 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.student')
 
-@section('title', 'Dashboard - Student')
-
-@section('sidebar')
-    <a href="/student/dashboard" class="nav-link active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-    <a href="/student/dtr" class="nav-link"><i class="fas fa-clock"></i> Daily Time Record</a>
-    <a href="/student/weekly-report" class="nav-link"><i class="fas fa-file-alt"></i> Weekly Reports</a>
-    <a href="/student/monthly-appraisal" class="nav-link"><i class="fas fa-star"></i> Monthly Appraisal</a>
-    <a href="/student/supervisor-eval" class="nav-link"><i class="fas fa-user-check"></i> Supervisor Evaluation</a>
-    <a href="/student/coc" class="nav-link"><i class="fas fa-certificate"></i> Certificate of Completion</a>
-    <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
-@endsection
+@section('title', 'Dashboard')
 
 @section('content')
 <div class="container-fluid">

@@ -223,20 +223,30 @@
             @endif
 
             <div class="test-accounts">
-                <p><strong>🧪 Test Accounts:</strong></p>
-                <div style="background: white; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 3px solid var(--ojtms-accent);">
-                    @if(isset($testAccounts) && $testAccounts->count() > 0)
-                        @foreach($testAccounts as $account)
-                            <p style="margin: 5px 0;">
-                                <strong>{{ ucfirst($account->role) }}:</strong> 
-                                {{ $account->username }} / password
-                            </p>
-                        @endforeach
-                    @else
-                        <p style="margin: 5px 0;"><strong>Admin:</strong> admin / password</p>
-                        <p style="margin: 5px 0;"><strong>Faculty:</strong> juandelacru / password</p>
-                        <p style="margin: 5px 0;"><strong>Student:</strong> johnsmith / password</p>
-                    @endif
+                <p><strong>🧪 Test Accounts</strong> <small>(click to fill)</small></p>
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+                    @php
+                        $accounts = isset($testAccounts) && $testAccounts->count() > 0
+                            ? $testAccounts->values()
+                            : collect([
+                                (object)['role' => 'admin',   'username' => 'admin'],
+                                (object)['role' => 'faculty',  'username' => 'juandelacru'],
+                                (object)['role' => 'student',  'username' => 'johnsmith'],
+                            ]);
+                        $roleColors = ['admin' => '#6c3483', 'faculty' => '#1a5276', 'student' => '#145a32'];
+                    @endphp
+                    @foreach($accounts as $account)
+                    @php $color = $roleColors[$account->role] ?? '#333'; @endphp
+                    <button type="button"
+                        onclick="fillCredentials('{{ $account->username }}', 'password')"
+                        style="background: white; border: 1px solid #ddd; border-left: 4px solid {{ $color }}; border-radius: 5px; padding: 7px 12px; text-align: left; cursor: pointer; font-size: 13px; transition: background 0.2s;"
+                        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">
+                        <span style="color: {{ $color }}; font-weight: 700;">{{ ucfirst($account->role) }}</span>
+                        &nbsp;&mdash;&nbsp;
+                        <code style="color: #333;">{{ $account->username }}</code>
+                        <span style="color: #999;"> / password</span>
+                    </button>
+                    @endforeach
                 </div>
             </div>
 
@@ -263,5 +273,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js"></script>
+    <script>
+        function fillCredentials(username, password) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+            document.getElementById('username').focus();
+        }
+    </script>
 </body>
 </html>

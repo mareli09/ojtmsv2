@@ -40,12 +40,10 @@ Route::get('/login', function () {
         }
     }
     
-    // Fetch test accounts from database
-    $testAccounts = \App\Models\User::whereIn('role', ['admin', 'faculty', 'student'])
-        ->limit(3)
-        ->get()
-        ->groupBy('role')
-        ->map(fn($group) => $group->first());
+    // Fetch one test account per role
+    $testAccounts = collect(['admin', 'faculty', 'student'])->map(function ($role) {
+        return \App\Models\User::where('role', $role)->where('status', 'active')->first();
+    })->filter();
     
     return view('auth.login', ['testAccounts' => $testAccounts]);
 });
@@ -79,6 +77,18 @@ Route::get('/logout', function () {
     session()->flush();
     return redirect('/login')->with('message', 'You have been logged out successfully.');
 })->name('logout');
+
+// File download route — serves files stored in storage/app/ (local disk)
+Route::get('/files/download', function (\Illuminate\Http\Request $request) {
+    $path = $request->query('path');
+    if (!$path) abort(404);
+    // Prevent directory traversal
+    $path = str_replace(['..', '\\'], '', $path);
+    if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+        abort(404);
+    }
+    return \Illuminate\Support\Facades\Storage::disk('local')->response($path);
+})->middleware('checkauth')->name('file.download');
 
 // Admin Routes
 Route::prefix('admin')->middleware('checkauth')->group(function () {
@@ -1006,15 +1016,27 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             'DTR',
             'Weekly report',
             'Monthly appraisal',
-            'Supervisor Eval',
+            'Supervisor evaluation',
             'Certificate of completion',
         ];
+
+        // Fetch latest entry per item for real status display
+        $allEntries = \App\Models\StudentChecklist::where('student_id', $studentId)
+            ->whereIn('item', $checklistItems)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $entriesByItem = [];
+        foreach ($checklistItems as $item) {
+            $entriesByItem[$item] = $allEntries->where('item', $item)->first();
+        }
 
         return view('faculty.student_checklist', [
             'user' => $user,
             'section' => $section,
             'student' => $student,
             'checklistItems' => $checklistItems,
+            'entriesByItem' => $entriesByItem,
         ]);
     });
 
@@ -1044,27 +1066,93 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         }
 
         $checklistItem = urldecode($item);
+        $recurringItems = ['DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
 
-        $entry = \App\Models\StudentChecklist::firstOrCreate(
-            [
-                'section_id' => $sectionId,
-                'student_id' => $studentId,
-                'item' => $checklistItem,
-            ],
-            [
-                'student_submitted_at' => now(),
-                'student_encoded_at' => now(),
-                'faculty_status' => 'pending',
-            ]
-        );
+        if (in_array($checklistItem, $recurringItems)) {
+            $entries = \App\Models\StudentChecklist::where('section_id', $sectionId)
+                ->where('student_id', $studentId)
+                ->where('item', $checklistItem)
+                ->orderBy('created_at', 'desc')
+                ->get();
+            $entry = $entries->first();
+        } else {
+            $entry = \App\Models\StudentChecklist::firstOrCreate(
+                ['section_id' => $sectionId, 'student_id' => $studentId, 'item' => $checklistItem],
+                ['student_submitted_at' => now(), 'student_encoded_at' => now(), 'faculty_status' => 'pending']
+            );
+            $entries = collect([$entry]);
+        }
 
         return view('faculty.student_checklist_item', [
-            'user' => $user,
+            'user'    => $user,
             'section' => $section,
             'student' => $student,
-            'item' => $checklistItem,
-            'entry' => $entry,
+            'item'    => $checklistItem,
+            'entry'   => $entry,
+            'entries' => $entries,
         ]);
+    });
+
+    // Review a specific recurring entry (DTR, Weekly report, etc.) by entry ID
+    Route::post('/section/{sectionId}/students/{studentId}/checklist/{item}/{entryId}', function (\Illuminate\Http\Request $request, $sectionId, $studentId, $item, $entryId) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+
+        $checklistItem = urldecode($item);
+
+        $entry = \App\Models\StudentChecklist::where('id', $entryId)
+            ->where('section_id', $sectionId)
+            ->where('student_id', $studentId)
+            ->where('item', $checklistItem)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'faculty_status'           => 'required|in:pending,approved,declined',
+            'faculty_remarks'          => 'nullable|string',
+            'faculty_dtr_target_hours' => 'nullable|numeric|min:1',
+            'faculty_weekly_remarks'   => 'nullable|string',
+            'faculty_appraisal_remarks'        => 'nullable|string',
+            'faculty_supervisor_eval_remarks'  => 'nullable|string',
+            'faculty_coc_remarks'             => 'nullable|string',
+        ]);
+
+        $remarks = $validated['faculty_remarks'] ?? $validated['faculty_weekly_remarks'] ?? $validated['faculty_appraisal_remarks'] ?? $validated['faculty_supervisor_eval_remarks'] ?? $validated['faculty_coc_remarks'] ?? null;
+
+        if ($validated['faculty_status'] === 'declined' && empty($remarks)) {
+            return back()->withErrors(['faculty_remarks' => 'Please provide a reason when declining.'])->withInput();
+        }
+
+        $updateData = [
+            'faculty_status'   => $validated['faculty_status'],
+            'faculty_remarks'  => $remarks,
+            'faculty_reviewed_at' => now(),
+        ];
+
+        if ($checklistItem === 'DTR' && $request->filled('faculty_dtr_target_hours')) {
+            $updateData['faculty_dtr_target_hours'] = $validated['faculty_dtr_target_hours'];
+            $updateData['faculty_dtr_reviewed_at']  = now();
+        }
+        if ($checklistItem === 'Weekly report' && $request->filled('faculty_weekly_remarks')) {
+            $updateData['faculty_weekly_remarks']      = $validated['faculty_weekly_remarks'];
+            $updateData['faculty_weekly_reviewed_at']  = now();
+        }
+        if ($checklistItem === 'Monthly appraisal' && $request->filled('faculty_appraisal_remarks')) {
+            $updateData['faculty_appraisal_remarks']     = $validated['faculty_appraisal_remarks'];
+            $updateData['faculty_appraisal_reviewed_at'] = now();
+        }
+        if ($checklistItem === 'Supervisor evaluation' && $request->filled('faculty_supervisor_eval_remarks')) {
+            $updateData['faculty_supervisor_eval_remarks']     = $validated['faculty_supervisor_eval_remarks'];
+            $updateData['faculty_supervisor_eval_reviewed_at'] = now();
+        }
+        if ($checklistItem === 'Certificate of completion' && $request->filled('faculty_coc_remarks')) {
+            $updateData['faculty_coc_remarks']     = $validated['faculty_coc_remarks'];
+            $updateData['faculty_coc_reviewed_at'] = now();
+        }
+
+        $entry->update($updateData);
+
+        return redirect("/faculty/section/{$sectionId}/students/{$studentId}/checklist/".urlencode($item))
+            ->with('success', 'Entry reviewed successfully.');
     });
 
     Route::post('/section/{sectionId}/students/{studentId}/checklist/{item}', function (\Illuminate\Http\Request $request, $sectionId, $studentId, $item) {
@@ -1110,7 +1198,7 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
 
         $updateData = [
             'faculty_status' => $validated['faculty_status'],
-            'faculty_remarks' => $validated['faculty_remarks'] ?? $validated['faculty_weekly_remarks'] ?? $validated['faculty_appraisal_remarks'] ?? $validated['faculty_supervisor_eval_remarks'] ?? $validated['faculty_coc_remarks'],
+            'faculty_remarks' => $validated['faculty_remarks'] ?? $validated['faculty_weekly_remarks'] ?? $validated['faculty_appraisal_remarks'] ?? $validated['faculty_supervisor_eval_remarks'] ?? $validated['faculty_coc_remarks'] ?? null,
             'faculty_reviewed_at' => now(),
         ];
 
@@ -1192,15 +1280,56 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
 
     Route::get('/announcements', function () {
         $user = session('user');
-        if ($user->role !== 'faculty') {
-            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
-        }
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $active   = \App\Models\Announcement::active()->with('creator')->latest()->get();
+        $archived = \App\Models\Announcement::withTrashed()->where('status', 'archived')->with('creator')->latest()->get();
+        return view('faculty.announcements', compact('user', 'active', 'archived'));
+    });
 
-        $announcements = \App\Models\Announcement::active()->latest()->get();
-        return view('faculty.announcements', [
-            'user' => $user,
-            'announcements' => $announcements,
+    Route::post('/announcements', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $request->validate([
+            'title'   => 'required|string|max:255',
+            'content' => 'required|string',
         ]);
+        \App\Models\Announcement::create([
+            'title'      => $request->input('title'),
+            'content'    => $request->input('content'),
+            'status'     => 'active',
+            'created_by' => $user->id,
+        ]);
+        return redirect('/faculty/announcements')->with('success', 'Announcement published successfully.');
+    });
+
+    Route::put('/announcements/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $request->validate([
+            'title'   => 'required|string|max:255',
+            'content' => 'required|string',
+        ]);
+        $announcement = \App\Models\Announcement::findOrFail($id);
+        $announcement->update(['title' => $request->input('title'), 'content' => $request->input('content')]);
+        return redirect('/faculty/announcements')->with('success', 'Announcement updated.');
+    });
+
+    Route::post('/announcements/{id}/archive', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $announcement = \App\Models\Announcement::findOrFail($id);
+        $announcement->update(['status' => 'archived']);
+        $announcement->delete(); // soft delete
+        return redirect('/faculty/announcements')->with('success', 'Announcement archived.');
+    });
+
+    Route::post('/announcements/{id}/restore', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $announcement = \App\Models\Announcement::withTrashed()->findOrFail($id);
+        $announcement->restore();
+        $announcement->update(['status' => 'active']);
+        return redirect('/faculty/announcements')->with('success', 'Announcement restored.');
     });
 
     Route::get('/profile', function () {
@@ -1274,16 +1403,31 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
 
+        // Receipt of OJT Kit must be submitted before DTR
+        if (!\App\Models\StudentChecklist::where('student_id', $user->id)->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists()) {
+            return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock DTR.');
+        }
+
         $validated = $request->validate([
-            'student_dtr_week' => 'required|string',
-            'student_dtr_hours' => 'required|numeric|min:0|max:60',
+            'student_dtr_week'         => 'required|string',
+            'student_dtr_hours'        => 'required|numeric|min:0|max:60',
             'student_dtr_validated_by' => 'required|string|min:3',
-            'student_remarks' => 'nullable|string',
+            'student_remarks'          => 'nullable|string',
+            'student_files'            => 'required|array|min:1',
+            'student_files.*'          => 'file|max:5120|mimes:pdf,doc,docx,jpg,jpeg,png',
         ]);
 
         $section = \App\Models\Section::find($user->section_id);
         if (!$section) {
             return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+        }
+
+        // Upload DTR files
+        $filePaths = [];
+        foreach ($request->file('student_files') as $file) {
+            if ($file->isValid()) {
+                $filePaths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/dtr', $file);
+            }
         }
 
         // Get or calculate total hours
@@ -1293,21 +1437,81 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             ->sum('student_dtr_hours') + $validated['student_dtr_hours'];
 
         $dtrEntry = \App\Models\StudentChecklist::create([
-            'section_id' => $section->id,
-            'student_id' => $user->id,
-            'item' => 'DTR',
-            'student_dtr_week' => $validated['student_dtr_week'],
-            'student_dtr_hours' => $validated['student_dtr_hours'],
+            'section_id'               => $section->id,
+            'student_id'               => $user->id,
+            'item'                     => 'DTR',
+            'student_dtr_week'         => $validated['student_dtr_week'],
+            'student_dtr_hours'        => $validated['student_dtr_hours'],
             'student_dtr_validated_by' => $validated['student_dtr_validated_by'],
-            'student_dtr_total_hours' => $totalHours,
-            'student_remarks' => $validated['student_remarks'],
-            'student_submitted_at' => now(),
-            'student_encoded_at' => now(),
-            'faculty_status' => 'pending',
+            'student_dtr_total_hours'  => $totalHours,
+            'student_remarks'          => $validated['student_remarks'],
+            'student_files'            => $filePaths,
+            'student_submitted_at'     => now(),
+            'student_encoded_at'       => now(),
+            'faculty_status'           => 'pending',
             'faculty_dtr_target_hours' => 720,
         ]);
 
         return redirect('/student/dtr')->with('success', 'DTR submitted successfully. Pending faculty review.');
+    });
+
+    Route::get('/dtr/{id}/edit', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::where('id', $id)->where('student_id', $user->id)->where('item', 'DTR')->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/dtr')->with('error', 'Approved DTR entries cannot be edited.');
+        }
+        return view('student.dtr_form', ['user' => $user, 'entry' => $entry]);
+    });
+
+    Route::put('/dtr/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::where('id', $id)->where('student_id', $user->id)->where('item', 'DTR')->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/dtr')->with('error', 'Approved DTR entries cannot be edited.');
+        }
+
+        $validated = $request->validate([
+            'student_dtr_week'         => 'required|string',
+            'student_dtr_hours'        => 'required|numeric|min:0|max:60',
+            'student_dtr_validated_by' => 'required|string|min:3',
+            'student_remarks'          => 'nullable|string',
+            'student_files'            => 'nullable|array',
+            'student_files.*'          => 'file|max:5120|mimes:pdf,doc,docx,jpg,jpeg,png',
+        ]);
+
+        // Upload new files if provided, otherwise keep existing
+        $filePaths = $entry->student_files ?? [];
+        if ($request->hasFile('student_files')) {
+            $filePaths = [];
+            foreach ($request->file('student_files') as $file) {
+                if ($file->isValid()) {
+                    $filePaths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/dtr', $file);
+                }
+            }
+        }
+
+        // Recalculate total: approved others + this entry's new hours
+        $approvedOtherHours = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'DTR')->where('faculty_status', 'approved')
+            ->where('id', '!=', $id)->sum('student_dtr_hours');
+        $totalHours = $approvedOtherHours + $validated['student_dtr_hours'];
+
+        $entry->update([
+            'student_dtr_week'         => $validated['student_dtr_week'],
+            'student_dtr_hours'        => $validated['student_dtr_hours'],
+            'student_dtr_validated_by' => $validated['student_dtr_validated_by'],
+            'student_dtr_total_hours'  => $totalHours,
+            'student_remarks'          => $validated['student_remarks'],
+            'student_files'            => $filePaths,
+            'student_submitted_at'     => now(),
+            'faculty_status'           => 'pending',
+            'faculty_remarks'          => null,
+        ]);
+
+        return redirect('/student/dtr')->with('success', 'DTR updated successfully. Pending faculty review.');
     });
 
     // Weekly Report Routes for Students
@@ -1346,6 +1550,11 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         $user = session('user');
         if ($user->role !== 'student') {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        // Receipt of OJT Kit must be submitted before Weekly Report
+        if (!\App\Models\StudentChecklist::where('student_id', $user->id)->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists()) {
+            return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock Weekly Report.');
         }
 
         $validated = $request->validate([
@@ -1423,6 +1632,11 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
 
+        // Receipt of OJT Kit must be submitted before Monthly Appraisal
+        if (!\App\Models\StudentChecklist::where('student_id', $user->id)->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists()) {
+            return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock Monthly Appraisal.');
+        }
+
         $validated = $request->validate([
             'student_appraisal_month' => 'required|string',
             'student_appraisal_file' => 'nullable|file|max:5120',
@@ -1487,6 +1701,11 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
 
+        // Receipt of OJT Kit must be submitted before Supervisor Evaluation
+        if (!\App\Models\StudentChecklist::where('student_id', $user->id)->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists()) {
+            return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock Supervisor Evaluation.');
+        }
+
         $validated = $request->validate([
             'student_supervisor_eval_file' => 'required|file|max:5120',
             'student_supervisor_eval_grade' => 'required|string',
@@ -1546,6 +1765,11 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
 
+        // Receipt of OJT Kit must be submitted before Certificate of Completion
+        if (!\App\Models\StudentChecklist::where('student_id', $user->id)->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists()) {
+            return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock Certificate of Completion.');
+        }
+
         $validated = $request->validate([
             'student_coc_file' => 'required|file|max:5120',
             'student_coc_signed_by' => 'required|string|max:255',
@@ -1578,6 +1802,303 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         ]);
 
         return redirect('/student/coc')->with('success', 'Certificate of Completion submitted successfully. Pending faculty review.');
+    });
+
+    // Checklist Overview
+    // Canonical ordered checklist items — single source of truth
+    $canonicalChecklistItems = [
+        ['label' => 'Registration card',         'icon' => 'fas fa-id-card',            'description' => 'Submit your registration card to begin the OJT process.',              'url' => '/student/checklist/Registration card/submit'],
+        ['label' => 'Medical Record',            'icon' => 'fas fa-notes-medical',      'description' => 'Upload your medical/physical examination results.',                    'url' => '/student/checklist/Medical Record/submit'],
+        ['label' => 'Receipt of OJT Kit',        'icon' => 'fas fa-receipt',            'description' => 'Upload proof of payment for your OJT kit.',                           'url' => '/student/checklist/Receipt of OJT Kit/submit'],
+        ['label' => 'Waiver',                    'icon' => 'fas fa-file-signature',     'description' => 'Upload your signed waiver form with guardian details.',                'url' => '/student/checklist/Waiver/submit'],
+        ['label' => 'Endorsement letter',        'icon' => 'fas fa-envelope-open-text', 'description' => 'Upload the endorsement letter issued by your school.',                 'url' => '/student/checklist/Endorsement letter/submit'],
+        ['label' => 'MOA',                       'icon' => 'fas fa-handshake',          'description' => 'Memorandum of Agreement between your school and the OJT company.',    'url' => '/student/checklist/MOA/submit'],
+        ['label' => 'DTR',                       'icon' => 'fas fa-clock',              'description' => 'Submit your weekly Daily Time Record (recurring each week).',          'url' => '/student/dtr'],
+        ['label' => 'Weekly report',             'icon' => 'fas fa-file-alt',           'description' => 'Submit your weekly progress and task report.',                         'url' => '/student/weekly-report'],
+        ['label' => 'Monthly appraisal',         'icon' => 'fas fa-star',               'description' => 'Submit your monthly performance appraisal.',                           'url' => '/student/monthly-appraisal'],
+        ['label' => 'Supervisor evaluation',     'icon' => 'fas fa-user-check',         'description' => 'Upload the evaluation form completed by your OJT supervisor.',         'url' => '/student/supervisor-eval'],
+        ['label' => 'Certificate of completion', 'icon' => 'fas fa-certificate',        'description' => 'Upload your Certificate of Completion issued by the company.',         'url' => '/student/coc'],
+    ];
+
+    Route::get('/checklist', function () use ($canonicalChecklistItems) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $labels = collect($canonicalChecklistItems)->pluck('label')->toArray();
+
+        $allEntries = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('section_id', $user->section_id)
+            ->whereIn('item', $labels)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Latest entry per item
+        $entryByItem = [];
+        foreach ($labels as $label) {
+            $entryByItem[$label] = $allEntries->where('item', $label)->first();
+        }
+
+        // Locking rules:
+        // - Items 0-2 (Registration card, Medical Record, Receipt of OJT Kit): sequential, each requires the previous faculty-approved
+        // - Items 3+ (Waiver onwards): all unlock once Receipt of OJT Kit is submitted by the student
+        $approvedLabels = $allEntries->where('faculty_status', 'approved')->pluck('item')->unique()->toArray();
+        $receiptSubmitted = $allEntries->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->isNotEmpty();
+        $locked = [];
+        foreach ($canonicalChecklistItems as $i => $item) {
+            if ($i === 0) {
+                $locked[$item['label']] = false;
+            } elseif ($i <= 2) {
+                $prevLabel = $canonicalChecklistItems[$i - 1]['label'];
+                $locked[$item['label']] = !in_array($prevLabel, $approvedLabels);
+            } else {
+                $locked[$item['label']] = !$receiptSubmitted;
+            }
+        }
+
+        return view('student.checklist', [
+            'user'           => $user,
+            'checklistItems' => $canonicalChecklistItems,
+            'entryByItem'    => $entryByItem,
+            'locked'         => $locked,
+        ]);
+    });
+
+    // Submit form for one-time checklist items (items 1–6)
+    Route::get('/checklist/{item}/submit', function ($item) use ($canonicalChecklistItems) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $itemLabel = urldecode($item);
+        $submitItems = ['Registration card', 'Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA'];
+        if (!in_array($itemLabel, $submitItems)) {
+            return redirect('/student/checklist');
+        }
+
+        // Check if this item is locked
+        $labels = collect($canonicalChecklistItems)->pluck('label')->toArray();
+        $itemIndex = array_search($itemLabel, $labels);
+        if ($itemIndex > 0 && $itemIndex <= 2) {
+            $prevLabel = $labels[$itemIndex - 1];
+            $prevApproved = \App\Models\StudentChecklist::where('student_id', $user->id)
+                ->where('item', $prevLabel)->where('faculty_status', 'approved')->exists();
+            if (!$prevApproved) {
+                return redirect('/student/checklist')->with('error', "Complete and get \"$prevLabel\" approved first.");
+            }
+        } elseif ($itemIndex > 2) {
+            $receiptSubmitted = \App\Models\StudentChecklist::where('student_id', $user->id)
+                ->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists();
+            if (!$receiptSubmitted) {
+                return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock this step.');
+            }
+        }
+
+        $entry = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', $itemLabel)->orderBy('created_at', 'desc')->first();
+
+        return view('student.checklist_submit', ['user' => $user, 'item' => $itemLabel, 'entry' => $entry]);
+    });
+
+    Route::post('/checklist/{item}/submit', function (\Illuminate\Http\Request $request, $item) use ($canonicalChecklistItems) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $itemLabel = urldecode($item);
+        $submitItems = ['Registration card', 'Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA'];
+        if (!in_array($itemLabel, $submitItems)) return redirect('/student/checklist');
+
+        $section = \App\Models\Section::find($user->section_id);
+        if (!$section) return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+
+        // Lock check
+        $labels = collect($canonicalChecklistItems)->pluck('label')->toArray();
+        $itemIndex = array_search($itemLabel, $labels);
+        if ($itemIndex > 0 && $itemIndex <= 2) {
+            $prevLabel = $labels[$itemIndex - 1];
+            $prevApproved = \App\Models\StudentChecklist::where('student_id', $user->id)
+                ->where('item', $prevLabel)->where('faculty_status', 'approved')->exists();
+            if (!$prevApproved) {
+                return redirect('/student/checklist')->with('error', "Complete and get \"$prevLabel\" approved first.");
+            }
+        } elseif ($itemIndex > 2) {
+            $receiptSubmitted = \App\Models\StudentChecklist::where('student_id', $user->id)
+                ->where('item', 'Receipt of OJT Kit')->whereNotNull('student_submitted_at')->exists();
+            if (!$receiptSubmitted) {
+                return redirect('/student/checklist')->with('error', 'Submit your Receipt of OJT Kit first to unlock this step.');
+            }
+        }
+
+        $data = ['section_id' => $section->id, 'student_id' => $user->id, 'item' => $itemLabel,
+                 'student_submitted_at' => now(), 'student_encoded_at' => now(), 'faculty_status' => 'pending'];
+
+        if ($itemLabel === 'Registration card') {
+            $request->validate(['student_file' => 'nullable|file|max:5120']);
+            if ($request->hasFile('student_file') && $request->file('student_file')->isValid()) {
+                $data['student_file'] = \Illuminate\Support\Facades\Storage::putFile('checklist/registration-card', $request->file('student_file'));
+            }
+            $data['student_remarks'] = $request->input('student_remarks');
+
+        } elseif ($itemLabel === 'Medical Record') {
+            $request->validate(['student_clinic_name' => 'required|string', 'student_clinic_address' => 'required|string']);
+            $data['student_clinic_name'] = $request->input('student_clinic_name');
+            $data['student_clinic_address'] = $request->input('student_clinic_address');
+            if ($request->hasFile('student_files')) {
+                $paths = [];
+                foreach ($request->file('student_files') as $f) {
+                    if ($f->isValid()) $paths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/medical-record', $f);
+                }
+                if (!empty($paths)) $data['student_files'] = $paths;
+            }
+
+        } elseif ($itemLabel === 'Receipt of OJT Kit') {
+            $request->validate(['student_paid_date' => 'required|date', 'student_receipt_number' => 'required|string']);
+            $data['student_paid_date'] = $request->input('student_paid_date');
+            $data['student_receipt_number'] = $request->input('student_receipt_number');
+            if ($request->hasFile('student_files')) {
+                $paths = [];
+                foreach ($request->file('student_files') as $f) {
+                    if ($f->isValid()) $paths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/ojt-kit', $f);
+                }
+                if (!empty($paths)) $data['student_files'] = $paths;
+            }
+
+        } elseif ($itemLabel === 'Waiver') {
+            $request->validate(['student_guardian_name' => 'required|string', 'student_guardian_contact' => 'required|string']);
+            $data['student_guardian_name']    = $request->input('student_guardian_name');
+            $data['student_guardian_contact'] = $request->input('student_guardian_contact');
+            $data['student_guardian_email']   = $request->input('student_guardian_email');
+            $data['student_guardian_social']  = $request->input('student_guardian_social');
+            if ($request->hasFile('student_files')) {
+                $paths = [];
+                foreach ($request->file('student_files') as $f) {
+                    if ($f->isValid()) $paths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/waiver', $f);
+                }
+                if (!empty($paths)) $data['student_files'] = $paths;
+            }
+
+        } elseif ($itemLabel === 'Endorsement letter') {
+            $request->validate(['student_endorsement_date' => 'required|date', 'student_start_date' => 'required|date', 'student_supervisor_signed_by' => 'required|string']);
+            $data['student_endorsement_date']    = $request->input('student_endorsement_date');
+            $data['student_start_date']          = $request->input('student_start_date');
+            $data['student_supervisor_signed_by'] = $request->input('student_supervisor_signed_by');
+            if ($request->hasFile('student_files')) {
+                $paths = [];
+                foreach ($request->file('student_files') as $f) {
+                    if ($f->isValid()) $paths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/endorsement', $f);
+                }
+                if (!empty($paths)) $data['student_files'] = $paths;
+            }
+
+        } elseif ($itemLabel === 'MOA') {
+            $data['student_remarks'] = $request->input('student_remarks');
+            if ($request->hasFile('student_files')) {
+                $paths = [];
+                foreach ($request->file('student_files') as $f) {
+                    if ($f->isValid()) $paths[] = \Illuminate\Support\Facades\Storage::putFile('checklist/moa', $f);
+                }
+                if (!empty($paths)) $data['student_files'] = $paths;
+            }
+        }
+
+        // Update existing entry or create new one
+        $existing = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', $itemLabel)->orderBy('created_at', 'desc')->first();
+
+        if ($existing) {
+            $existing->update($data);
+        } else {
+            \App\Models\StudentChecklist::create($data);
+        }
+
+        return redirect('/student/checklist')->with('success', "\"$itemLabel\" submitted successfully. Pending faculty review.");
+    });
+
+    // Announcements
+    Route::get('/announcements', function () {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $announcements = \App\Models\Announcement::active()->with('creator')->latest()->get();
+        // Mark all active announcements as read
+        foreach ($announcements as $ann) {
+            \App\Models\AnnouncementRead::firstOrCreate(
+                ['user_id' => $user->id, 'announcement_id' => $ann->id],
+                ['read_at' => now()]
+            );
+        }
+        return view('student.announcements', ['user' => $user, 'announcements' => $announcements]);
+    });
+
+    // Incident Report
+    Route::get('/incident-report', function () {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $reports = \App\Models\IncidentReport::where('student_id', $user->id)->latest()->get();
+        return view('student.incident_report', ['user' => $user, 'reports' => $reports]);
+    });
+
+    Route::post('/incident-report', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $validated = $request->validate([
+            'type'          => 'required|string',
+            'incident_date' => 'required|date',
+            'location'      => 'required|string|max:255',
+            'description'   => 'required|string',
+            'action_taken'  => 'nullable|string',
+        ]);
+
+        \App\Models\IncidentReport::create(array_merge($validated, ['student_id' => $user->id]));
+
+        return redirect('/student/incident-report')->with('success', 'Incident report submitted successfully.');
+    });
+
+    // FAQ
+    Route::get('/faq', function () {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        return view('student.faq', ['user' => $user, 'faqs' => []]);
+    });
+
+    // Chatbot AI
+    Route::get('/chatbot', function () {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        return view('student.chatbot', ['user' => $user]);
+    });
+
+    // Profile Settings
+    Route::get('/profile', function () {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        return view('student.profile', ['user' => $user]);
+    });
+
+    Route::put('/profile', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $validated = $request->validate([
+            'email'    => 'required|email|unique:users,email,' . $user->id,
+            'contact'  => 'nullable|string|max:20',
+            'password' => 'nullable|string|min:6|confirmed',
+        ]);
+
+        $updateData = [
+            'email'   => $validated['email'],
+            'contact' => $validated['contact'] ?? $user->contact,
+        ];
+
+        if (!empty($validated['password'])) {
+            $updateData['password'] = bcrypt($validated['password']);
+        }
+
+        \App\Models\User::where('id', $user->id)->update($updateData);
+
+        // Refresh session
+        $refreshed = \App\Models\User::find($user->id);
+        session(['user' => $refreshed]);
+
+        return redirect('/student/profile')->with('success', 'Profile updated successfully.');
     });
 });
 

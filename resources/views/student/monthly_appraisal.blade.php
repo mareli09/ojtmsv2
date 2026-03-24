@@ -1,16 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.student')
 
 @section('title', 'Monthly Appraisals')
-
-@section('sidebar')
-    <a href="/student/dashboard" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-    <a href="/student/dtr" class="nav-link"><i class="fas fa-clock"></i> Daily Time Record</a>
-    <a href="/student/weekly-report" class="nav-link"><i class="fas fa-file-alt"></i> Weekly Reports</a>
-    <a href="/student/monthly-appraisal" class="nav-link active"><i class="fas fa-star"></i> Monthly Appraisal</a>
-    <a href="/student/supervisor-eval" class="nav-link"><i class="fas fa-user-check"></i> Supervisor Evaluation</a>
-    <a href="/student/coc" class="nav-link"><i class="fas fa-certificate"></i> Certificate of Completion</a>
-    <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
-@endsection
 
 @section('content')
 <div class="container-fluid">
@@ -61,7 +51,7 @@
                                 </td>
                                 <td>
                                     @if($appraisal->student_appraisal_file)
-                                        <a href="/{{ ltrim($appraisal->student_appraisal_file, '/') }}" target="_blank" class="badge bg-info text-decoration-none">
+                                        <a href="{{ route('file.download', ['path' => $appraisal->student_appraisal_file]) }}" target="_blank" class="badge bg-info text-decoration-none">
                                             <i class="fas fa-file"></i> View
                                         </a>
                                     @else
@@ -91,71 +81,6 @@
                                     </button>
                                 </td>
                             </tr>
-
-                            <!-- View Modal -->
-                            <div class="modal fade" id="appraisalModal{{ $appraisal->id }}" tabindex="-1">
-                                <div class="modal-dialog modal-lg">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Monthly Appraisal - {{ $appraisal->student_appraisal_month }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <p><strong>Month:</strong> {{ $appraisal->student_appraisal_month ?? 'N/A' }}</p>
-                                            
-                                            <hr>
-                                            
-                                            @if($appraisal->student_appraisal_feedback)
-                                                <h6><strong>Your Feedback:</strong></h6>
-                                                <div class="bg-light p-3 rounded mb-3">
-                                                    {{ $appraisal->student_appraisal_feedback }}
-                                                </div>
-                                            @endif
-
-                                            <p><strong>Grade/Rating:</strong> 
-                                                @if($appraisal->student_appraisal_grade_rating)
-                                                    <span class="badge bg-secondary">{{ $appraisal->student_appraisal_grade_rating }}</span>
-                                                @else
-                                                    Not provided
-                                                @endif
-                                            </p>
-                                            <p><strong>Evaluated by:</strong> {{ $appraisal->student_appraisal_evaluated_by ?? 'Not specified' }}</p>
-
-                                            @if($appraisal->student_appraisal_file)
-                                                <h6><strong>Uploaded File:</strong></h6>
-                                                <a href="/{{ ltrim($appraisal->student_appraisal_file, '/') }}" target="_blank" class="badge bg-info text-decoration-none p-2">
-                                                    <i class="fas fa-file"></i> {{ basename($appraisal->student_appraisal_file) }}
-                                                </a>
-                                            @endif
-
-                                            <hr>
-                                            
-                                            <p><strong>Submitted on:</strong> {{ $appraisal->student_appraisal_submitted_at?->format('M d, Y @ H:i') ?? 'Not submitted' }}</p>
-                                            <p><strong>Status:</strong> 
-                                                @if($appraisal->faculty_status === 'approved')
-                                                    <span class="badge bg-success">Approved</span>
-                                                @elseif($appraisal->faculty_status === 'declined')
-                                                    <span class="badge bg-danger">Revision Needed</span>
-                                                @else
-                                                    <span class="badge bg-warning">Pending Review</span>
-                                                @endif
-                                            </p>
-                                            @if($appraisal->faculty_appraisal_remarks)
-                                                <p><strong>Faculty Feedback:</strong></p>
-                                                <div class="bg-light p-3 rounded">
-                                                    {{ $appraisal->faculty_appraisal_remarks }}
-                                                </div>
-                                                <p class="small text-muted mt-2">Reviewed on {{ $appraisal->faculty_appraisal_reviewed_at?->format('M d, Y @ H:i') ?? 'N/A' }}</p>
-                                            @else
-                                                <p class="small text-muted">Awaiting faculty feedback...</p>
-                                            @endif
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         @endforeach
                     </tbody>
                 </table>
@@ -163,9 +88,66 @@
         </div>
     @else
         <div class="alert alert-info">
-            <i class="fas fa-info-circle"></i> <strong>No appraisals submitted yet.</strong> Start by submitting your first monthly appraisal.
+            <i class="fas fa-info-circle"></i> No appraisals submitted yet.
+            <a href="/student/monthly-appraisal/create" class="alert-link">Submit your first appraisal now.</a>
         </div>
-        <a href="/student/monthly-appraisal/create" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Submit First Appraisal</a>
     @endif
 </div>
+
+{{-- Modals outside the table --}}
+@foreach($appraisals as $appraisal)
+<div class="modal fade" id="appraisalModal{{ $appraisal->id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-star me-2"></i>Monthly Appraisal — {{ $appraisal->student_appraisal_month }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-2">
+                    <div class="col-md-6"><strong>Month:</strong> {{ $appraisal->student_appraisal_month ?? 'N/A' }}</div>
+                    <div class="col-md-6"><strong>Evaluated by:</strong> {{ $appraisal->student_appraisal_evaluated_by ?? '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Grade/Rating:</strong>
+                        @if($appraisal->student_appraisal_grade_rating)
+                            <span class="badge bg-secondary ms-1">{{ $appraisal->student_appraisal_grade_rating }}</span>
+                        @else — @endif
+                    </div>
+                    <div class="col-md-6"><strong>Submitted:</strong> {{ $appraisal->student_appraisal_submitted_at?->format('M d, Y g:i A') ?? '—' }}</div>
+                </div>
+                @if($appraisal->student_appraisal_feedback)
+                <h6>Your Feedback:</h6>
+                <div class="bg-light p-3 rounded mb-3">{{ $appraisal->student_appraisal_feedback }}</div>
+                @endif
+                @if($appraisal->student_appraisal_file)
+                <p><strong>Uploaded File:</strong>
+                    <a href="{{ route('file.download', ['path' => $appraisal->student_appraisal_file]) }}" target="_blank" class="ms-1">
+                        <i class="fas fa-file me-1"></i>{{ basename($appraisal->student_appraisal_file) }}
+                    </a>
+                </p>
+                @endif
+                <hr>
+                <p><strong>Status:</strong>
+                    @if($appraisal->faculty_status === 'approved') <span class="badge bg-success">Approved</span>
+                    @elseif($appraisal->faculty_status === 'declined') <span class="badge bg-danger">Revision Needed</span>
+                    @else <span class="badge bg-warning">Pending Review</span>
+                    @endif
+                </p>
+                @if($appraisal->faculty_appraisal_remarks)
+                <p><strong>Faculty Feedback:</strong></p>
+                <div class="bg-light p-3 rounded">{{ $appraisal->faculty_appraisal_remarks }}</div>
+                <small class="text-muted">Reviewed: {{ $appraisal->faculty_appraisal_reviewed_at?->format('M d, Y g:i A') ?? 'N/A' }}</small>
+                @else
+                <p class="text-muted small">Awaiting faculty feedback...</p>
+                @endif
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@endforeach
 @endsection
