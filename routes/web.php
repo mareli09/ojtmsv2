@@ -716,8 +716,8 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
         ]);
 
         \App\Models\Announcement::create([
-            'title' => $request->title,
-            'content' => $request->content,
+            'title' => $request->input('title'),
+            'content' => $request->input('content'),
             'status' => 'active',
             'created_by' => session('user_id'),
         ]);
@@ -746,9 +746,9 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
         }
 
         $announcement->update([
-            'title' => $request->title,
-            'content' => $request->content,
-            'status' => $request->status,
+            'title' => $request->input('title'),
+            'content' => $request->input('content'),
+            'status' => $request->input('status'),
         ]);
 
         return redirect('/admin/announcements')->with('success', 'Announcement updated successfully!');
