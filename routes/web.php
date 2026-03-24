@@ -918,6 +918,304 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             'studentsCount' => $studentsCount,
         ]);
     });
+
+    Route::get('/section', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $query = \App\Models\Section::where('faculty_id', $user->id)->where('deleted_at', null);
+
+        if ($request->filled('school_year')) {
+            $query->where('school_year', 'like', '%'.$request->input('school_year').'%');
+        }
+
+        if ($request->filled('term')) {
+            $query->where('term', 'like', '%'.$request->input('term').'%');
+        }
+
+        $sections = $query->orderBy('school_year', 'desc')->orderBy('term', 'asc')->get();
+
+        return view('faculty.section', [
+            'user' => $user,
+            'sections' => $sections,
+            'filters' => [
+                'school_year' => $request->input('school_year', ''),
+                'term' => $request->input('term', ''),
+            ],
+        ]);
+    });
+
+    Route::get('/section/{id}/students', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::where('id', $id)
+            ->where('faculty_id', $user->id)
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$section) {
+            return redirect('/faculty/section')->with('error', 'Section not found or not assigned to you.');
+        }
+
+        $students = $section->students()->get();
+
+        return view('faculty.section_students', [
+            'user' => $user,
+            'section' => $section,
+            'students' => $students,
+        ]);
+    });
+
+    Route::get('/section/{sectionId}/students/{studentId}', function ($sectionId, $studentId) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::where('id', $sectionId)
+            ->where('faculty_id', $user->id)
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$section) {
+            return redirect('/faculty/section')->with('error', 'Section not found or not assigned to you.');
+        }
+
+        $student = \App\Models\User::where('id', $studentId)
+            ->where('section_id', $sectionId)
+            ->where('role', 'student')
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$student) {
+            return redirect('/faculty/section/'.$sectionId.'/students')->with('error', 'Student not found in this section.');
+        }
+
+        $checklistItems = [
+            'Registration card',
+            'Medical Record',
+            'Receipt of OJT Kit',
+            'Waiver',
+            'Endorsement letter',
+            'MOA',
+            'DTR',
+            'Weekly report',
+            'Monthly appraisal',
+            'Supervisor Eval',
+            'Certificate of completion',
+        ];
+
+        return view('faculty.student_checklist', [
+            'user' => $user,
+            'section' => $section,
+            'student' => $student,
+            'checklistItems' => $checklistItems,
+        ]);
+    });
+
+    Route::get('/section/{sectionId}/students/{studentId}/checklist/{item}', function ($sectionId, $studentId, $item) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::where('id', $sectionId)
+            ->where('faculty_id', $user->id)
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$section) {
+            return redirect('/faculty/section')->with('error', 'Section not found or not assigned to you.');
+        }
+
+        $student = \App\Models\User::where('id', $studentId)
+            ->where('section_id', $sectionId)
+            ->where('role', 'student')
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$student) {
+            return redirect('/faculty/section/'.$sectionId.'/students')->with('error', 'Student not found in this section.');
+        }
+
+        $checklistItem = urldecode($item);
+
+        $entry = \App\Models\StudentChecklist::firstOrCreate(
+            [
+                'section_id' => $sectionId,
+                'student_id' => $studentId,
+                'item' => $checklistItem,
+            ],
+            [
+                'student_submitted_at' => now(),
+                'student_encoded_at' => now(),
+                'faculty_status' => 'pending',
+            ]
+        );
+
+        return view('faculty.student_checklist_item', [
+            'user' => $user,
+            'section' => $section,
+            'student' => $student,
+            'item' => $checklistItem,
+            'entry' => $entry,
+        ]);
+    });
+
+    Route::post('/section/{sectionId}/students/{studentId}/checklist/{item}', function (\Illuminate\Http\Request $request, $sectionId, $studentId, $item) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::where('id', $sectionId)
+            ->where('faculty_id', $user->id)
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$section) {
+            return redirect('/faculty/section')->with('error', 'Section not found or not assigned to you.');
+        }
+
+        $student = \App\Models\User::where('id', $studentId)
+            ->where('section_id', $sectionId)
+            ->where('role', 'student')
+            ->where('deleted_at', null)
+            ->first();
+
+        if (!$student) {
+            return redirect('/faculty/section/'.$sectionId.'/students')->with('error', 'Student not found in this section.');
+        }
+
+        $checklistItem = urldecode($item);
+
+        $validated = $request->validate([
+            'faculty_status' => 'required|in:pending,approved,declined',
+            'faculty_remarks' => 'nullable|string',
+            'faculty_dtr_target_hours' => 'nullable|numeric|min:1',
+            'faculty_weekly_remarks' => 'nullable|string',
+            'faculty_appraisal_remarks' => 'nullable|string',
+            'faculty_supervisor_eval_remarks' => 'nullable|string',
+            'faculty_coc_remarks' => 'nullable|string',
+        ]);
+
+        if ($validated['faculty_status'] === 'declined' && empty($validated['faculty_remarks']) && empty($validated['faculty_weekly_remarks']) && empty($validated['faculty_appraisal_remarks']) && empty($validated['faculty_supervisor_eval_remarks']) && empty($validated['faculty_coc_remarks'])) {
+            return back()->withErrors(['faculty_remarks' => 'Please set a reason when declining'])->withInput();
+        }
+
+        $updateData = [
+            'faculty_status' => $validated['faculty_status'],
+            'faculty_remarks' => $validated['faculty_remarks'] ?? $validated['faculty_weekly_remarks'] ?? $validated['faculty_appraisal_remarks'] ?? $validated['faculty_supervisor_eval_remarks'] ?? $validated['faculty_coc_remarks'],
+            'faculty_reviewed_at' => now(),
+        ];
+
+        // Handle DTR-specific field
+        if ($checklistItem === 'DTR' && $request->filled('faculty_dtr_target_hours')) {
+            $updateData['faculty_dtr_target_hours'] = $validated['faculty_dtr_target_hours'];
+            $updateData['faculty_dtr_reviewed_at'] = now();
+        }
+
+        // Handle Weekly Report-specific field
+        if ($checklistItem === 'Weekly report' && $request->filled('faculty_weekly_remarks')) {
+            $updateData['faculty_weekly_remarks'] = $validated['faculty_weekly_remarks'];
+            $updateData['faculty_weekly_reviewed_at'] = now();
+        }
+
+        // Handle Monthly Appraisal-specific field
+        if ($checklistItem === 'Monthly appraisal' && $request->filled('faculty_appraisal_remarks')) {
+            $updateData['faculty_appraisal_remarks'] = $validated['faculty_appraisal_remarks'];
+            $updateData['faculty_appraisal_reviewed_at'] = now();
+        }
+
+        // Handle Supervisor Evaluation-specific field
+        if ($checklistItem === 'Supervisor evaluation' && $request->filled('faculty_supervisor_eval_remarks')) {
+            $updateData['faculty_supervisor_eval_remarks'] = $validated['faculty_supervisor_eval_remarks'];
+            $updateData['faculty_supervisor_eval_reviewed_at'] = now();
+        }
+
+        // Handle Certificate of Completion-specific field
+        if ($checklistItem === 'Certificate of completion' && $request->filled('faculty_coc_remarks')) {
+            $updateData['faculty_coc_remarks'] = $validated['faculty_coc_remarks'];
+            $updateData['faculty_coc_reviewed_at'] = now();
+        }
+
+        $entry = \App\Models\StudentChecklist::updateOrCreate(
+            [
+                'section_id' => $sectionId,
+                'student_id' => $studentId,
+                'item' => $checklistItem,
+            ],
+            $updateData
+        );
+
+        // Enforce submitted status for special items once faculty sees them
+        if (in_array($checklistItem, ['Waiver', 'Endorsement letter']) && $entry->student_submission_status === 'pending') {
+            $entry->student_submission_status = 'submitted';
+            $entry->save();
+        }
+
+        return redirect("/faculty/section/{$sectionId}/students/{$studentId}/checklist/".urlencode($item))
+            ->with('success', 'Checklist item updated successfully.');
+    });
+
+    Route::get('/incident-reports', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        return view('faculty.incident_reports', ['user' => $user]);
+    });
+
+    Route::get('/reports', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        return view('faculty.reports', ['user' => $user]);
+    });
+
+    Route::get('/faqs', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        return view('faculty.faqs', ['user' => $user]);
+    });
+
+    Route::get('/announcements', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $announcements = \App\Models\Announcement::active()->latest()->get();
+        return view('faculty.announcements', [
+            'user' => $user,
+            'announcements' => $announcements,
+        ]);
+    });
+
+    Route::get('/profile', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::find($user->section_id);
+
+        return view('faculty.profile', [
+            'user' => $user,
+            'section' => $section,
+        ]);
+    });
 });
 
 // Student Routes
@@ -937,4 +1235,349 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             'faculty' => $faculty,
         ]);
     });
+
+    // DTR (Daily Time Record) Routes for Students
+    Route::get('/dtr', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $dtrEntries = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'DTR')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('student.dtr', [
+            'user' => $user,
+            'dtrEntries' => $dtrEntries,
+        ]);
+    });
+
+    Route::get('/dtr/create', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::find($user->section_id);
+
+        return view('student.dtr_form', [
+            'user' => $user,
+            'section' => $section,
+        ]);
+    });
+
+    Route::post('/dtr', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $validated = $request->validate([
+            'student_dtr_week' => 'required|string',
+            'student_dtr_hours' => 'required|numeric|min:0|max:60',
+            'student_dtr_validated_by' => 'required|string|min:3',
+            'student_remarks' => 'nullable|string',
+        ]);
+
+        $section = \App\Models\Section::find($user->section_id);
+        if (!$section) {
+            return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+        }
+
+        // Get or calculate total hours
+        $totalHours = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'DTR')
+            ->where('faculty_status', 'approved')
+            ->sum('student_dtr_hours') + $validated['student_dtr_hours'];
+
+        $dtrEntry = \App\Models\StudentChecklist::create([
+            'section_id' => $section->id,
+            'student_id' => $user->id,
+            'item' => 'DTR',
+            'student_dtr_week' => $validated['student_dtr_week'],
+            'student_dtr_hours' => $validated['student_dtr_hours'],
+            'student_dtr_validated_by' => $validated['student_dtr_validated_by'],
+            'student_dtr_total_hours' => $totalHours,
+            'student_remarks' => $validated['student_remarks'],
+            'student_submitted_at' => now(),
+            'student_encoded_at' => now(),
+            'faculty_status' => 'pending',
+            'faculty_dtr_target_hours' => 720,
+        ]);
+
+        return redirect('/student/dtr')->with('success', 'DTR submitted successfully. Pending faculty review.');
+    });
+
+    // Weekly Report Routes for Students
+    Route::get('/weekly-report', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $weeklyReports = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'Weekly report')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('student.weekly_report', [
+            'user' => $user,
+            'weeklyReports' => $weeklyReports,
+        ]);
+    });
+
+    Route::get('/weekly-report/create', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::find($user->section_id);
+
+        return view('student.weekly_report_form', [
+            'user' => $user,
+            'section' => $section,
+        ]);
+    });
+
+    Route::post('/weekly-report', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $validated = $request->validate([
+            'student_weekly_week' => 'required|string',
+            'student_weekly_task_description' => 'required|string|min:10',
+            'student_weekly_supervisor_feedback' => 'required|string|min:5',
+            'student_weekly_files.*' => 'nullable|file|max:5120',
+        ]);
+
+        $section = \App\Models\Section::find($user->section_id);
+        if (!$section) {
+            return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+        }
+
+        $uploadedFiles = [];
+        if ($request->hasFile('student_weekly_files')) {
+            foreach ($request->file('student_weekly_files') as $file) {
+                if ($file->isValid()) {
+                    $path = \Illuminate\Support\Facades\Storage::putFile('weekly-reports', $file);
+                    $uploadedFiles[] = $path;
+                }
+            }
+        }
+
+        $weeklyReportEntry = \App\Models\StudentChecklist::create([
+            'section_id' => $section->id,
+            'student_id' => $user->id,
+            'item' => 'Weekly report',
+            'student_weekly_week' => $validated['student_weekly_week'],
+            'student_weekly_task_description' => $validated['student_weekly_task_description'],
+            'student_weekly_supervisor_feedback' => $validated['student_weekly_supervisor_feedback'],
+            'student_weekly_files' => $uploadedFiles,
+            'student_weekly_submitted_at' => now(),
+            'faculty_status' => 'pending',
+        ]);
+
+        return redirect('/student/weekly-report')->with('success', 'Weekly report submitted successfully. Pending faculty review.');
+    });
+
+    // Monthly Appraisal Routes for Students
+    Route::get('/monthly-appraisal', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $appraisals = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'Monthly appraisal')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('student.monthly_appraisal', [
+            'user' => $user,
+            'appraisals' => $appraisals,
+        ]);
+    });
+
+    Route::get('/monthly-appraisal/create', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $section = \App\Models\Section::find($user->section_id);
+
+        return view('student.monthly_appraisal_form', [
+            'user' => $user,
+            'section' => $section,
+        ]);
+    });
+
+    Route::post('/monthly-appraisal', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $validated = $request->validate([
+            'student_appraisal_month' => 'required|string',
+            'student_appraisal_file' => 'nullable|file|max:5120',
+            'student_appraisal_feedback' => 'nullable|string',
+            'student_appraisal_grade_rating' => 'nullable|string',
+            'student_appraisal_evaluated_by' => 'nullable|string',
+        ]);
+
+        $section = \App\Models\Section::find($user->section_id);
+        if (!$section) {
+            return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+        }
+
+        $uploadedFile = null;
+        if ($request->hasFile('student_appraisal_file')) {
+            if ($request->file('student_appraisal_file')->isValid()) {
+                $uploadedFile = \Illuminate\Support\Facades\Storage::putFile('monthly-appraisals', $request->file('student_appraisal_file'));
+            }
+        }
+
+        $appraisalEntry = \App\Models\StudentChecklist::create([
+            'section_id' => $section->id,
+            'student_id' => $user->id,
+            'item' => 'Monthly appraisal',
+            'student_appraisal_month' => $validated['student_appraisal_month'],
+            'student_appraisal_file' => $uploadedFile,
+            'student_appraisal_feedback' => $validated['student_appraisal_feedback'],
+            'student_appraisal_grade_rating' => $validated['student_appraisal_grade_rating'],
+            'student_appraisal_evaluated_by' => $validated['student_appraisal_evaluated_by'],
+            'student_appraisal_submitted_at' => now(),
+            'faculty_status' => 'pending',
+        ]);
+
+        return redirect('/student/monthly-appraisal')->with('success', 'Monthly appraisal submitted successfully. Pending faculty review.');
+    });
+
+    Route::get('/supervisor-eval', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $section = \App\Models\Section::find($user->section_id);
+        $entries = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'Supervisor evaluation')
+            ->orderBy('created_at', 'desc')
+            ->get();
+        return view('student.supervisor_eval', ['user' => $user, 'section' => $section, 'entries' => $entries]);
+    });
+
+    Route::get('/supervisor-eval/create', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $section = \App\Models\Section::find($user->section_id);
+        return view('student.supervisor_eval_form', ['user' => $user, 'section' => $section]);
+    });
+
+    Route::post('/supervisor-eval', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $validated = $request->validate([
+            'student_supervisor_eval_file' => 'required|file|max:5120',
+            'student_supervisor_eval_grade' => 'required|string',
+        ]);
+
+        $section = \App\Models\Section::find($user->section_id);
+        if (!$section) {
+            return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+        }
+
+        $uploadedFile = null;
+        if ($request->hasFile('student_supervisor_eval_file')) {
+            if ($request->file('student_supervisor_eval_file')->isValid()) {
+                $uploadedFile = \Illuminate\Support\Facades\Storage::putFile('supervisor-evals', $request->file('student_supervisor_eval_file'));
+            }
+        }
+
+        $evalEntry = \App\Models\StudentChecklist::create([
+            'section_id' => $section->id,
+            'student_id' => $user->id,
+            'item' => 'Supervisor evaluation',
+            'student_supervisor_eval_file' => $uploadedFile,
+            'student_supervisor_eval_grade' => $validated['student_supervisor_eval_grade'],
+            'student_supervisor_eval_submitted_at' => now(),
+            'faculty_status' => 'pending',
+        ]);
+
+        return redirect('/student/supervisor-eval')->with('success', 'Supervisor evaluation submitted successfully. Pending faculty review.');
+    });
+
+    // Certificate of Completion (COC) Routes for Students
+    Route::get('/coc', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $section = \App\Models\Section::find($user->section_id);
+        $entries = \App\Models\StudentChecklist::where('student_id', $user->id)
+            ->where('item', 'Certificate of completion')
+            ->orderBy('created_at', 'desc')
+            ->get();
+        return view('student.coc', ['user' => $user, 'section' => $section, 'entries' => $entries]);
+    });
+
+    Route::get('/coc/create', function () {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $section = \App\Models\Section::find($user->section_id);
+        return view('student.coc_form', ['user' => $user, 'section' => $section]);
+    });
+
+    Route::post('/coc', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $validated = $request->validate([
+            'student_coc_file' => 'required|file|max:5120',
+            'student_coc_signed_by' => 'required|string|max:255',
+            'student_coc_company' => 'required|string|max:255',
+            'student_coc_date_issued' => 'required|date',
+            'student_coc_receive_date' => 'nullable|date',
+        ]);
+
+        $section = \App\Models\Section::find($user->section_id);
+        if (!$section) {
+            return back()->withErrors(['error' => 'No section assigned.'])->withInput();
+        }
+
+        $uploadedFile = null;
+        if ($request->hasFile('student_coc_file') && $request->file('student_coc_file')->isValid()) {
+            $uploadedFile = \Illuminate\Support\Facades\Storage::putFile('coc-files', $request->file('student_coc_file'));
+        }
+
+        \App\Models\StudentChecklist::create([
+            'section_id' => $section->id,
+            'student_id' => $user->id,
+            'item' => 'Certificate of completion',
+            'student_coc_file' => $uploadedFile,
+            'student_coc_signed_by' => $validated['student_coc_signed_by'],
+            'student_coc_company' => $validated['student_coc_company'],
+            'student_coc_date_issued' => $validated['student_coc_date_issued'],
+            'student_coc_receive_date' => $validated['student_coc_receive_date'] ?? null,
+            'student_coc_submitted_at' => now(),
+            'faculty_status' => 'pending',
+        ]);
+
+        return redirect('/student/coc')->with('success', 'Certificate of Completion submitted successfully. Pending faculty review.');
+    });
 });
+

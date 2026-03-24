@@ -269,8 +269,18 @@
 <body>
     <!-- ===== NAVBAR ===== -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-admin">
-        <a class="navbar-brand" href="/admin/dashboard">
-            <i class="fas fa-chart-line"></i>OJTMS Admin
+        @php
+            $currentRole = session('user')->role ?? 'admin';
+            $brandText = match($currentRole) {
+                'faculty' => 'OJTMS Faculty',
+                'student' => 'OJTMS Student',
+                default => 'OJTMS Admin',
+            };
+            $brandLink = $currentRole === 'faculty' ? '/faculty/dashboard' : ($currentRole === 'student' ? '/student/dashboard' : '/admin/dashboard');
+        @endphp
+
+        <a class="navbar-brand" href="{{ $brandLink }}">
+            <i class="fas fa-chart-line"></i>{{ $brandText }}
         </a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -278,6 +288,7 @@
         </button>
 
         <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            @if(session('user')->role === 'admin')
             <div class="navbar-nav">
                 <a class="nav-link" href="/">
                     <i class="fas fa-home"></i> Back to Site
@@ -286,6 +297,7 @@
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </div>
+            @endif
         </div>
     </nav>
 

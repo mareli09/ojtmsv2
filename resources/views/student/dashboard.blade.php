@@ -4,6 +4,11 @@
 
 @section('sidebar')
     <a href="/student/dashboard" class="nav-link active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+    <a href="/student/dtr" class="nav-link"><i class="fas fa-clock"></i> Daily Time Record</a>
+    <a href="/student/weekly-report" class="nav-link"><i class="fas fa-file-alt"></i> Weekly Reports</a>
+    <a href="/student/monthly-appraisal" class="nav-link"><i class="fas fa-star"></i> Monthly Appraisal</a>
+    <a href="/student/supervisor-eval" class="nav-link"><i class="fas fa-user-check"></i> Supervisor Evaluation</a>
+    <a href="/student/coc" class="nav-link"><i class="fas fa-certificate"></i> Certificate of Completion</a>
     <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
 @endsection
 
@@ -90,6 +95,15 @@
     <div class="row">
         <div class="col-12">
             <h4 class="mb-3">Quick Actions</h4>
+            <a href="/student/dtr" class="btn btn-primary">
+                <i class="fas fa-clock"></i> Daily Time Record
+            </a>
+            <a href="/student/weekly-report" class="btn btn-info">
+                <i class="fas fa-file-alt"></i> Weekly Reports
+            </a>
+            <a href="/student/monthly-appraisal" class="btn btn-warning">
+                <i class="fas fa-star"></i> Monthly Appraisal
+            </a>
             <a href="/logout" class="btn btn-danger">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </a>
