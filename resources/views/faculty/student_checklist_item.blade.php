@@ -28,7 +28,7 @@
                 Section: <strong>{{ $section->name }}</strong>
             </p>
         </div>
-        <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist" class="btn btn-secondary">
+        <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back to Checklist
         </a>
     </div>
@@ -36,6 +36,12 @@
     @if(session('success'))
     <div class="alert alert-success alert-dismissible fade show">
         {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+    @if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     @endif
@@ -131,7 +137,19 @@
                                 <td>{{ $e->student_coc_company ?? '—' }}</td>
                                 <td>{{ $e->student_coc_date_issued ? \Carbon\Carbon::parse($e->student_coc_date_issued)->format('M d, Y') : '—' }}</td>
                             @endif
-                            <td>{{ $e->student_submitted_at?->format('M d, Y') ?? '—' }}</td>
+                            <td>
+                                @if($item === 'Weekly report')
+                                    {{ $e->student_weekly_submitted_at?->format('M d, Y') ?? '—' }}
+                                @elseif($item === 'Monthly appraisal')
+                                    {{ $e->student_appraisal_submitted_at?->format('M d, Y') ?? '—' }}
+                                @elseif($item === 'Supervisor evaluation')
+                                    {{ $e->student_supervisor_eval_submitted_at?->format('M d, Y') ?? '—' }}
+                                @elseif($item === 'Certificate of completion')
+                                    {{ $e->student_coc_submitted_at?->format('M d, Y') ?? '—' }}
+                                @else
+                                    {{ $e->student_submitted_at?->format('M d, Y') ?? '—' }}
+                                @endif
+                            </td>
                             <td>
                                 @php $sc = $e->faculty_status === 'approved' ? 'success' : ($e->faculty_status === 'declined' ? 'danger' : 'warning'); @endphp
                                 <span class="badge bg-{{ $sc }}">{{ ucfirst($e->faculty_status ?? 'pending') }}</span>
@@ -245,7 +263,7 @@
                     @error('faculty_remarks')<div class="text-danger small">{{ $message }}</div>@enderror
                 </div>
                 <button type="submit" class="btn btn-success"><i class="fas fa-check-circle"></i> Save Review</button>
-                <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}/checklist" class="btn btn-secondary">Cancel</a>
+                <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}" class="btn btn-secondary">Cancel</a>
             </div>
         </div>
     </form>
@@ -387,5 +405,48 @@
 </div>
 @endforeach
 @endif
+
+<script>
+document.querySelectorAll('form[action*="/checklist/"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        var statusSelect = form.querySelector('select[name="faculty_status"]');
+        if (!statusSelect || statusSelect.value !== 'declined') return;
+
+        var remarksField = form.querySelector('textarea[name="faculty_weekly_remarks"]')
+            || form.querySelector('textarea[name="faculty_remarks"]')
+            || form.querySelector('textarea[name="faculty_appraisal_remarks"]')
+            || form.querySelector('textarea[name="faculty_supervisor_eval_remarks"]')
+            || form.querySelector('textarea[name="faculty_coc_remarks"]');
+
+        if (remarksField && remarksField.value.trim() === '') {
+            e.preventDefault();
+            remarksField.classList.add('is-invalid');
+            if (!remarksField.nextElementSibling || !remarksField.nextElementSibling.classList.contains('text-danger')) {
+                var div = document.createElement('div');
+                div.className = 'text-danger small mt-1';
+                div.textContent = 'Please provide a reason when declining.';
+                remarksField.parentNode.insertBefore(div, remarksField.nextSibling);
+            }
+            remarksField.focus();
+        }
+    });
+
+    var statusSelect = form.querySelector('select[name="faculty_status"]');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', function() {
+            var remarksField = form.querySelector('textarea[name="faculty_weekly_remarks"]')
+                || form.querySelector('textarea[name="faculty_remarks"]')
+                || form.querySelector('textarea[name="faculty_appraisal_remarks"]')
+                || form.querySelector('textarea[name="faculty_supervisor_eval_remarks"]')
+                || form.querySelector('textarea[name="faculty_coc_remarks"]');
+            if (remarksField) {
+                remarksField.classList.remove('is-invalid');
+                var msg = remarksField.nextElementSibling;
+                if (msg && msg.classList.contains('text-danger')) msg.remove();
+            }
+        });
+    }
+});
+</script>
 
 @endsection

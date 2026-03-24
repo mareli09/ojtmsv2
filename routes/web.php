@@ -676,6 +676,8 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
             'linkedin_url' => 'nullable|url',
             'twitter_url' => 'nullable|url',
             'youtube_url' => 'nullable|url',
+            'openai_api_key' => 'nullable|string|max:255',
+            'openai_enabled' => 'nullable|string',
         ]);
 
         $cmsFields = [
@@ -701,6 +703,16 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
                 ['value' => $value, 'section' => $section]
             );
         }
+
+        // OpenAI settings
+        \App\Models\CMS::updateOrCreate(['key' => 'openai_api_key'], [
+            'value' => $request->openai_api_key ?? '',
+            'section' => 'openai',
+        ]);
+        \App\Models\CMS::updateOrCreate(['key' => 'openai_enabled'], [
+            'value' => $request->has('openai_enabled') ? '1' : '0',
+            'section' => 'openai',
+        ]);
 
         return back()->with('success', 'CMS Settings updated successfully!');
     })->name('cms.update');
@@ -918,15 +930,67 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         if ($user->role !== 'faculty') {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
-        
-        $section = \App\Models\Section::find($user->section_id);
-        $studentsCount = $section ? $section->students()->count() : 0;
-        
-        return view('faculty.dashboard', [
-            'user' => $user,
-            'section' => $section,
-            'studentsCount' => $studentsCount,
-        ]);
+
+        $sections = \App\Models\Section::where('faculty_id', $user->id)->get();
+        $sectionIds = $sections->pluck('id');
+        $students = \App\Models\User::whereIn('section_id', $sectionIds)->where('role', 'student')->get();
+        $studentIds = $students->pluck('id');
+        $allEntries = \App\Models\StudentChecklist::whereIn('student_id', $studentIds)->get();
+        $incidents = \App\Models\IncidentReport::whereIn('section_id', $sectionIds)->get();
+
+        $studentsCount = $students->count();
+        $totalSubmissions = $allEntries->count();
+        $approvedCount    = $allEntries->where('faculty_status', 'approved')->count();
+        $pendingCount     = $allEntries->where('faculty_status', 'pending')->count();
+        $declinedCount    = $allEntries->where('faculty_status', 'declined')->count();
+        $pendingIncidents = $incidents->where('faculty_status', 'pending')->count();
+
+        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
+
+        // Per-item submission stats
+        $itemStats = [];
+        foreach ($checklistItems as $item) {
+            $itemEntries = $allEntries->where('item', $item);
+            $itemStats[$item] = [
+                'total'    => $itemEntries->count(),
+                'approved' => $itemEntries->where('faculty_status', 'approved')->count(),
+                'pending'  => $itemEntries->where('faculty_status', 'pending')->count(),
+                'declined' => $itemEntries->where('faculty_status', 'declined')->count(),
+            ];
+        }
+
+        // Students completion ranking (top 5 / bottom 5)
+        $studentProgress = [];
+        foreach ($students as $s) {
+            $entries = $allEntries->where('student_id', $s->id);
+            $completed = 0;
+            foreach ($checklistItems as $item) {
+                if ($entries->where('item', $item)->where('faculty_status', 'approved')->count() > 0) $completed++;
+            }
+            $dtrHours = $entries->where('item', 'DTR')->where('faculty_status', 'approved')->sum('student_dtr_hours');
+            $studentProgress[] = [
+                'name' => $s->first_name . ' ' . $s->last_name,
+                'completed' => $completed,
+                'total' => count($checklistItems),
+                'dtr_hours' => $dtrHours,
+                'pct' => count($checklistItems) > 0 ? round(($completed / count($checklistItems)) * 100) : 0,
+            ];
+        }
+        usort($studentProgress, fn($a, $b) => $b['pct'] <=> $a['pct']);
+
+        // Recent submissions (last 7)
+        $recentActivity = $allEntries->sortByDesc('updated_at')->take(7)->map(function ($e) use ($students) {
+            $student = $students->firstWhere('id', $e->student_id);
+            $e->student_name = $student ? $student->first_name . ' ' . $student->last_name : 'Unknown';
+            return $e;
+        });
+
+        return view('faculty.dashboard', compact(
+            'user', 'sections', 'studentsCount',
+            'totalSubmissions', 'approvedCount', 'pendingCount', 'declinedCount', 'pendingIncidents',
+            'checklistItems', 'itemStats', 'studentProgress', 'recentActivity'
+        ));
     });
 
     Route::get('/section', function (\Illuminate\Http\Request $request) {
@@ -1119,7 +1183,7 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         $remarks = $validated['faculty_remarks'] ?? $validated['faculty_weekly_remarks'] ?? $validated['faculty_appraisal_remarks'] ?? $validated['faculty_supervisor_eval_remarks'] ?? $validated['faculty_coc_remarks'] ?? null;
 
         if ($validated['faculty_status'] === 'declined' && empty($remarks)) {
-            return back()->withErrors(['faculty_remarks' => 'Please provide a reason when declining.'])->withInput();
+            return back()->with('error', 'Please provide a reason/feedback when declining.');
         }
 
         $updateData = [
@@ -1132,20 +1196,20 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             $updateData['faculty_dtr_target_hours'] = $validated['faculty_dtr_target_hours'];
             $updateData['faculty_dtr_reviewed_at']  = now();
         }
-        if ($checklistItem === 'Weekly report' && $request->filled('faculty_weekly_remarks')) {
-            $updateData['faculty_weekly_remarks']      = $validated['faculty_weekly_remarks'];
-            $updateData['faculty_weekly_reviewed_at']  = now();
+        if ($checklistItem === 'Weekly report') {
+            $updateData['faculty_weekly_remarks']     = $validated['faculty_weekly_remarks'] ?? null;
+            $updateData['faculty_weekly_reviewed_at'] = now();
         }
-        if ($checklistItem === 'Monthly appraisal' && $request->filled('faculty_appraisal_remarks')) {
-            $updateData['faculty_appraisal_remarks']     = $validated['faculty_appraisal_remarks'];
+        if ($checklistItem === 'Monthly appraisal') {
+            $updateData['faculty_appraisal_remarks']     = $validated['faculty_appraisal_remarks'] ?? null;
             $updateData['faculty_appraisal_reviewed_at'] = now();
         }
-        if ($checklistItem === 'Supervisor evaluation' && $request->filled('faculty_supervisor_eval_remarks')) {
-            $updateData['faculty_supervisor_eval_remarks']     = $validated['faculty_supervisor_eval_remarks'];
+        if ($checklistItem === 'Supervisor evaluation') {
+            $updateData['faculty_supervisor_eval_remarks']     = $validated['faculty_supervisor_eval_remarks'] ?? null;
             $updateData['faculty_supervisor_eval_reviewed_at'] = now();
         }
-        if ($checklistItem === 'Certificate of completion' && $request->filled('faculty_coc_remarks')) {
-            $updateData['faculty_coc_remarks']     = $validated['faculty_coc_remarks'];
+        if ($checklistItem === 'Certificate of completion') {
+            $updateData['faculty_coc_remarks']     = $validated['faculty_coc_remarks'] ?? null;
             $updateData['faculty_coc_reviewed_at'] = now();
         }
 
@@ -1209,26 +1273,26 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         }
 
         // Handle Weekly Report-specific field
-        if ($checklistItem === 'Weekly report' && $request->filled('faculty_weekly_remarks')) {
-            $updateData['faculty_weekly_remarks'] = $validated['faculty_weekly_remarks'];
+        if ($checklistItem === 'Weekly report') {
+            $updateData['faculty_weekly_remarks'] = $validated['faculty_weekly_remarks'] ?? null;
             $updateData['faculty_weekly_reviewed_at'] = now();
         }
 
         // Handle Monthly Appraisal-specific field
-        if ($checklistItem === 'Monthly appraisal' && $request->filled('faculty_appraisal_remarks')) {
-            $updateData['faculty_appraisal_remarks'] = $validated['faculty_appraisal_remarks'];
+        if ($checklistItem === 'Monthly appraisal') {
+            $updateData['faculty_appraisal_remarks'] = $validated['faculty_appraisal_remarks'] ?? null;
             $updateData['faculty_appraisal_reviewed_at'] = now();
         }
 
         // Handle Supervisor Evaluation-specific field
-        if ($checklistItem === 'Supervisor evaluation' && $request->filled('faculty_supervisor_eval_remarks')) {
-            $updateData['faculty_supervisor_eval_remarks'] = $validated['faculty_supervisor_eval_remarks'];
+        if ($checklistItem === 'Supervisor evaluation') {
+            $updateData['faculty_supervisor_eval_remarks'] = $validated['faculty_supervisor_eval_remarks'] ?? null;
             $updateData['faculty_supervisor_eval_reviewed_at'] = now();
         }
 
         // Handle Certificate of Completion-specific field
-        if ($checklistItem === 'Certificate of completion' && $request->filled('faculty_coc_remarks')) {
-            $updateData['faculty_coc_remarks'] = $validated['faculty_coc_remarks'];
+        if ($checklistItem === 'Certificate of completion') {
+            $updateData['faculty_coc_remarks'] = $validated['faculty_coc_remarks'] ?? null;
             $updateData['faculty_coc_reviewed_at'] = now();
         }
 
@@ -1257,7 +1321,36 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
 
-        return view('faculty.incident_reports', ['user' => $user]);
+        $sections = \App\Models\Section::where('faculty_id', $user->id)->pluck('id');
+        $reports = \App\Models\IncidentReport::whereIn('section_id', $sections)
+            ->with('student')
+            ->latest()
+            ->get();
+
+        return view('faculty.incident_reports', ['user' => $user, 'reports' => $reports]);
+    });
+
+    Route::post('/incident-reports/{id}/review', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $sections = \App\Models\Section::where('faculty_id', $user->id)->pluck('id');
+        $report = \App\Models\IncidentReport::whereIn('section_id', $sections)->findOrFail($id);
+
+        $validated = $request->validate([
+            'faculty_status'  => 'required|in:pending,reviewing,taken_action,resolved,declined',
+            'faculty_remarks' => 'nullable|string',
+        ]);
+
+        $report->update([
+            'faculty_status'      => $validated['faculty_status'],
+            'faculty_remarks'     => $validated['faculty_remarks'] ?? null,
+            'faculty_reviewed_at' => now(),
+        ]);
+
+        return redirect('/faculty/incident-reports')->with('success', 'Incident report updated successfully.');
     });
 
     Route::get('/reports', function () {
@@ -1271,11 +1364,59 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
 
     Route::get('/faqs', function () {
         $user = session('user');
-        if ($user->role !== 'faculty') {
-            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
-        }
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $faqs     = \App\Models\Faq::where('faculty_id', $user->id)->latest()->get();
+        $archived = \App\Models\Faq::onlyTrashed()->where('faculty_id', $user->id)->latest()->get();
+        return view('faculty.faqs', compact('user', 'faqs', 'archived'));
+    });
 
-        return view('faculty.faqs', ['user' => $user]);
+    Route::post('/faqs', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $validated = $request->validate([
+            'category' => 'required|string|max:100',
+            'question' => 'required|string',
+            'answer'   => 'required|string',
+        ]);
+        \App\Models\Faq::create(array_merge($validated, ['faculty_id' => $user->id]));
+        return redirect('/faculty/faqs')->with('success', 'FAQ created successfully.');
+    });
+
+    Route::put('/faqs/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $faq = \App\Models\Faq::where('faculty_id', $user->id)->findOrFail($id);
+        $validated = $request->validate([
+            'category' => 'required|string|max:100',
+            'question' => 'required|string',
+            'answer'   => 'required|string',
+        ]);
+        $faq->update($validated);
+        return redirect('/faculty/faqs')->with('success', 'FAQ updated successfully.');
+    });
+
+    Route::delete('/faqs/{id}', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $faq = \App\Models\Faq::where('faculty_id', $user->id)->findOrFail($id);
+        $faq->delete();
+        return redirect('/faculty/faqs')->with('success', 'FAQ archived.');
+    });
+
+    Route::post('/faqs/{id}/restore', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $faq = \App\Models\Faq::onlyTrashed()->where('faculty_id', $user->id)->findOrFail($id);
+        $faq->restore();
+        return redirect('/faculty/faqs')->with('success', 'FAQ restored.');
+    });
+
+    Route::delete('/faqs/{id}/force', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $faq = \App\Models\Faq::onlyTrashed()->where('faculty_id', $user->id)->findOrFail($id);
+        $faq->forceDelete();
+        return redirect('/faculty/faqs')->with('success', 'FAQ permanently deleted.');
     });
 
     Route::get('/announcements', function () {
@@ -1345,6 +1486,205 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             'section' => $section,
         ]);
     });
+
+    // Faculty AI Chatbot
+    Route::get('/chatbot', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
+        return view('faculty.chatbot', compact('user', 'aiEnabled'));
+    });
+
+    Route::post('/chatbot/ask', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return response()->json(['error' => 'Unauthorized'], 403);
+
+        $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
+        $apiKey    = \App\Models\CMS::getValue('openai_api_key');
+        if (!$aiEnabled || !$apiKey) {
+            return response()->json(['reply' => 'AI features are currently disabled by the administrator. Please contact your admin to enable OpenAI integration.']);
+        }
+
+        $request->validate(['message' => 'required|string|max:2000']);
+
+        // Gather context for the AI
+        $sections = \App\Models\Section::where('faculty_id', $user->id)->with('students')->get();
+        $sectionIds = $sections->pluck('id');
+        $studentIds = \App\Models\User::whereIn('section_id', $sectionIds)->pluck('id');
+        $totalStudents = $studentIds->count();
+        $allEntries = \App\Models\StudentChecklist::whereIn('student_id', $studentIds)->get();
+        $pendingReview = $allEntries->where('faculty_status', 'pending')->count();
+        $incidentCount = \App\Models\IncidentReport::whereIn('section_id', $sectionIds)->where('faculty_status', 'pending')->count();
+
+        $systemPrompt = "You are an AI assistant for a faculty member in an OJT (On-the-Job Training) Monitoring System. "
+            . "Faculty: {$user->first_name} {$user->last_name}. "
+            . "They handle " . $sections->count() . " section(s) with {$totalStudents} students total. "
+            . "There are {$pendingReview} pending submission reviews and {$incidentCount} pending incident reports. "
+            . "Help them with OJT management: student performance analysis, review priorities, checklist guidance, "
+            . "best practices for evaluating student submissions, and OJT process questions. "
+            . "Keep responses concise and practical. You may suggest actions they can take in the system.";
+
+        $messages = $request->input('history', []);
+        array_unshift($messages, ['role' => 'system', 'content' => $systemPrompt]);
+        $messages[] = ['role' => 'user', 'content' => $request->input('message')];
+
+        try {
+            $ch = curl_init('https://api.openai.com/v1/chat/completions');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey,
+                ],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'model' => 'gpt-4o-mini',
+                    'messages' => $messages,
+                    'max_tokens' => 1000,
+                    'temperature' => 0.7,
+                ]),
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200) {
+                $errBody = json_decode($response, true);
+                $errMsg = $errBody['error']['message'] ?? 'OpenAI API error (HTTP ' . $httpCode . ')';
+                return response()->json(['reply' => 'API Error: ' . $errMsg]);
+            }
+
+            $data = json_decode($response, true);
+            $reply = $data['choices'][0]['message']['content'] ?? 'No response from AI.';
+            return response()->json(['reply' => $reply]);
+        } catch (\Exception $e) {
+            return response()->json(['reply' => 'Error connecting to OpenAI: ' . $e->getMessage()]);
+        }
+    });
+
+    // Decision Support System
+    Route::get('/decision-support', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') return redirect('/admin/dashboard');
+        $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
+
+        $sections = \App\Models\Section::where('faculty_id', $user->id)->get();
+        $sectionIds = $sections->pluck('id');
+        $students = \App\Models\User::whereIn('section_id', $sectionIds)->where('role', 'student')->get();
+        $allEntries = \App\Models\StudentChecklist::whereIn('student_id', $students->pluck('id'))->get();
+        $incidents = \App\Models\IncidentReport::whereIn('section_id', $sectionIds)->get();
+
+        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
+
+        $studentData = [];
+        foreach ($students as $s) {
+            $entries = $allEntries->where('student_id', $s->id);
+            $approved = $entries->where('faculty_status', 'approved')->count();
+            $pending  = $entries->where('faculty_status', 'pending')->count();
+            $declined = $entries->where('faculty_status', 'declined')->count();
+            $dtrHours = $entries->where('item', 'DTR')->where('faculty_status', 'approved')->sum('student_dtr_hours');
+            $targetHours = $entries->where('item', 'DTR')->max('faculty_dtr_target_hours') ?? 486;
+            $completedItems = 0;
+            foreach ($checklistItems as $item) {
+                if ($entries->where('item', $item)->where('faculty_status', 'approved')->count() > 0) $completedItems++;
+            }
+            $incidentCount = $incidents->where('student_id', $s->id)->count();
+
+            $studentData[] = [
+                'id' => $s->id,
+                'name' => $s->first_name . ' ' . $s->last_name,
+                'student_id' => $s->student_id,
+                'section' => $sections->firstWhere('id', $s->section_id)?->name ?? 'N/A',
+                'completed_items' => $completedItems,
+                'total_items' => count($checklistItems),
+                'approved' => $approved,
+                'pending' => $pending,
+                'declined' => $declined,
+                'dtr_hours' => $dtrHours,
+                'target_hours' => $targetHours,
+                'hours_percent' => $targetHours > 0 ? round(($dtrHours / $targetHours) * 100) : 0,
+                'incidents' => $incidentCount,
+            ];
+        }
+
+        return view('faculty.decision_support', compact('user', 'aiEnabled', 'studentData', 'sections'));
+    });
+
+    Route::post('/decision-support/analyze', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') return response()->json(['error' => 'Unauthorized'], 403);
+
+        $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
+        $apiKey    = \App\Models\CMS::getValue('openai_api_key');
+        if (!$aiEnabled || !$apiKey) {
+            return response()->json(['analysis' => 'AI features are currently disabled by the administrator.']);
+        }
+
+        $request->validate(['student_data' => 'required|string', 'prompt_type' => 'required|string']);
+
+        $prompts = [
+            'at_risk' => 'Analyze these OJT students and identify who are AT RISK of not completing their OJT. '
+                . 'Consider: low checklist completion, few approved DTR hours vs target, high decline rates, incident reports. '
+                . 'For each at-risk student, explain WHY they are at risk and give specific RECOMMENDATIONS for the faculty to help them. '
+                . 'Format as a clear, actionable list.',
+            'performance' => 'Give a comprehensive PERFORMANCE SUMMARY of these OJT students. '
+                . 'Rank them by overall progress (checklist completion + hours + approval rate). '
+                . 'Highlight top performers and those needing improvement. '
+                . 'Provide specific recommendations for the faculty.',
+            'priority' => 'Based on these students\' data, what should the faculty PRIORITIZE this week? '
+                . 'Consider pending reviews, students falling behind on hours, declined submissions that need re-review, '
+                . 'and incident reports. Give a concrete action plan.',
+            'custom' => $request->input('custom_prompt', 'Analyze the student data and provide insights.'),
+        ];
+
+        $promptType = $request->input('prompt_type');
+        $analysisPrompt = $prompts[$promptType] ?? $prompts['performance'];
+
+        $systemPrompt = "You are a Decision Support System for an OJT faculty coordinator. "
+            . "You analyze student performance data and provide actionable recommendations. "
+            . "Be specific, data-driven, and practical. Use the student names and numbers in your analysis. "
+            . "Format your response with clear headings and bullet points using markdown.";
+
+        $messages = [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $analysisPrompt . "\n\nStudent Data:\n" . $request->input('student_data')],
+        ];
+
+        try {
+            $ch = curl_init('https://api.openai.com/v1/chat/completions');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_TIMEOUT => 60,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey,
+                ],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'model' => 'gpt-4o-mini',
+                    'messages' => $messages,
+                    'max_tokens' => 2000,
+                    'temperature' => 0.7,
+                ]),
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200) {
+                $errBody = json_decode($response, true);
+                return response()->json(['analysis' => 'API Error: ' . ($errBody['error']['message'] ?? 'HTTP ' . $httpCode)]);
+            }
+
+            $data = json_decode($response, true);
+            $analysis = $data['choices'][0]['message']['content'] ?? 'No analysis generated.';
+            return response()->json(['analysis' => $analysis]);
+        } catch (\Exception $e) {
+            return response()->json(['analysis' => 'Error: ' . $e->getMessage()]);
+        }
+    });
 });
 
 // Student Routes
@@ -1354,15 +1694,49 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         if ($user->role !== 'student') {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
-        
+
         $section = \App\Models\Section::find($user->section_id);
         $faculty = $section ? $section->faculty : null;
-        
-        return view('student.dashboard', [
-            'user' => $user,
-            'section' => $section,
-            'faculty' => $faculty,
-        ]);
+
+        $allEntries = \App\Models\StudentChecklist::where('student_id', $user->id)->get();
+
+        // Checklist completion: 10 items, check if each has at least one approved entry
+        $checklistItems = [
+            'Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion',
+        ];
+        $completedItems = [];
+        foreach ($checklistItems as $item) {
+            $completedItems[$item] = $allEntries->where('item', $item)->where('faculty_status', 'approved')->count() > 0;
+        }
+        $completedCount = count(array_filter($completedItems));
+
+        // OJT Hours
+        $dtrEntries = $allEntries->where('item', 'DTR');
+        $approvedDtr = $dtrEntries->where('faculty_status', 'approved');
+        $totalHoursWorked = $approvedDtr->sum('student_dtr_hours');
+        $targetHours = $dtrEntries->max('faculty_dtr_target_hours') ?? 486;
+
+        // Submission stats
+        $totalSubmissions = $allEntries->count();
+        $approvedCount    = $allEntries->where('faculty_status', 'approved')->count();
+        $pendingCount     = $allEntries->where('faculty_status', 'pending')->count();
+        $declinedCount    = $allEntries->where('faculty_status', 'declined')->count();
+
+        // Recurring item counts
+        $weeklyCount    = $allEntries->where('item', 'Weekly report')->count();
+        $appraisalCount = $allEntries->where('item', 'Monthly appraisal')->count();
+
+        // Recent activity (last 5 submissions/reviews)
+        $recentActivity = $allEntries->sortByDesc('updated_at')->take(5);
+
+        return view('student.dashboard', compact(
+            'user', 'section', 'faculty',
+            'checklistItems', 'completedItems', 'completedCount',
+            'totalHoursWorked', 'targetHours',
+            'totalSubmissions', 'approvedCount', 'pendingCount', 'declinedCount',
+            'weeklyCount', 'appraisalCount', 'recentActivity'
+        ));
     });
 
     // DTR (Daily Time Record) Routes for Students
@@ -1377,9 +1751,16 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             ->orderBy('created_at', 'desc')
             ->get();
 
+        $archivedDtrEntries = \App\Models\StudentChecklist::onlyTrashed()
+            ->where('student_id', $user->id)
+            ->where('item', 'DTR')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+
         return view('student.dtr', [
-            'user' => $user,
-            'dtrEntries' => $dtrEntries,
+            'user'               => $user,
+            'dtrEntries'         => $dtrEntries,
+            'archivedDtrEntries' => $archivedDtrEntries,
         ]);
     });
 
@@ -1514,6 +1895,25 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         return redirect('/student/dtr')->with('success', 'DTR updated successfully. Pending faculty review.');
     });
 
+    Route::delete('/dtr/{id}', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::where('id', $id)->where('student_id', $user->id)->where('item', 'DTR')->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/dtr')->with('error', 'Approved DTR entries cannot be archived.');
+        }
+        $entry->delete();
+        return redirect('/student/dtr')->with('success', 'DTR entry archived successfully.');
+    });
+
+    Route::post('/dtr/{id}/restore', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::onlyTrashed()->where('id', $id)->where('student_id', $user->id)->where('item', 'DTR')->firstOrFail();
+        $entry->restore();
+        return redirect('/student/dtr')->with('success', 'DTR entry restored successfully.');
+    });
+
     // Weekly Report Routes for Students
     Route::get('/weekly-report', function () {
         $user = session('user');
@@ -1526,9 +1926,16 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             ->orderBy('created_at', 'desc')
             ->get();
 
+        $archivedWeeklyReports = \App\Models\StudentChecklist::onlyTrashed()
+            ->where('student_id', $user->id)
+            ->where('item', 'Weekly report')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+
         return view('student.weekly_report', [
-            'user' => $user,
-            'weeklyReports' => $weeklyReports,
+            'user'                  => $user,
+            'weeklyReports'         => $weeklyReports,
+            'archivedWeeklyReports' => $archivedWeeklyReports,
         ]);
     });
 
@@ -1594,6 +2001,73 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         return redirect('/student/weekly-report')->with('success', 'Weekly report submitted successfully. Pending faculty review.');
     });
 
+    Route::get('/weekly-report/{id}/edit', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::where('id', $id)->where('student_id', $user->id)->where('item', 'Weekly report')->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/weekly-report')->with('error', 'Approved weekly reports cannot be edited.');
+        }
+        return view('student.weekly_report_form', ['user' => $user, 'entry' => $entry]);
+    });
+
+    Route::put('/weekly-report/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::where('id', $id)->where('student_id', $user->id)->where('item', 'Weekly report')->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/weekly-report')->with('error', 'Approved weekly reports cannot be edited.');
+        }
+
+        $validated = $request->validate([
+            'student_weekly_week'               => 'required|string',
+            'student_weekly_task_description'   => 'required|string|min:10',
+            'student_weekly_supervisor_feedback'=> 'required|string|min:5',
+            'student_weekly_files.*'            => 'nullable|file|max:5120',
+        ]);
+
+        $filePaths = $entry->student_weekly_files ?? [];
+        if ($request->hasFile('student_weekly_files')) {
+            $filePaths = [];
+            foreach ($request->file('student_weekly_files') as $file) {
+                if ($file->isValid()) {
+                    $filePaths[] = \Illuminate\Support\Facades\Storage::putFile('weekly-reports', $file);
+                }
+            }
+        }
+
+        $entry->update([
+            'student_weekly_week'               => $validated['student_weekly_week'],
+            'student_weekly_task_description'   => $validated['student_weekly_task_description'],
+            'student_weekly_supervisor_feedback'=> $validated['student_weekly_supervisor_feedback'],
+            'student_weekly_files'              => $filePaths,
+            'student_weekly_submitted_at'       => now(),
+            'faculty_status'                    => 'pending',
+            'faculty_weekly_remarks'            => null,
+        ]);
+
+        return redirect('/student/weekly-report')->with('success', 'Weekly report updated successfully. Pending faculty review.');
+    });
+
+    Route::delete('/weekly-report/{id}', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::where('id', $id)->where('student_id', $user->id)->where('item', 'Weekly report')->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/weekly-report')->with('error', 'Approved weekly reports cannot be archived.');
+        }
+        $entry->delete();
+        return redirect('/student/weekly-report')->with('success', 'Weekly report archived successfully.');
+    });
+
+    Route::post('/weekly-report/{id}/restore', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+        $entry = \App\Models\StudentChecklist::onlyTrashed()->where('id', $id)->where('student_id', $user->id)->where('item', 'Weekly report')->firstOrFail();
+        $entry->restore();
+        return redirect('/student/weekly-report')->with('success', 'Weekly report restored successfully.');
+    });
+
     // Monthly Appraisal Routes for Students
     Route::get('/monthly-appraisal', function () {
         $user = session('user');
@@ -1606,9 +2080,16 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             ->orderBy('created_at', 'desc')
             ->get();
 
+        $archivedAppraisals = \App\Models\StudentChecklist::onlyTrashed()
+            ->where('student_id', $user->id)
+            ->where('item', 'Monthly appraisal')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+
         return view('student.monthly_appraisal', [
             'user' => $user,
             'appraisals' => $appraisals,
+            'archivedAppraisals' => $archivedAppraisals,
         ]);
     });
 
@@ -1673,6 +2154,87 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         return redirect('/student/monthly-appraisal')->with('success', 'Monthly appraisal submitted successfully. Pending faculty review.');
     });
 
+    Route::get('/monthly-appraisal/{id}/edit', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $appraisal = \App\Models\StudentChecklist::where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Monthly appraisal')
+            ->firstOrFail();
+        if ($appraisal->faculty_status === 'approved') {
+            return redirect('/student/monthly-appraisal')->with('error', 'Approved appraisals cannot be edited.');
+        }
+        $section = \App\Models\Section::find($user->section_id);
+        return view('student.monthly_appraisal_form', ['user' => $user, 'section' => $section, 'appraisal' => $appraisal]);
+    });
+
+    Route::put('/monthly-appraisal/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $appraisal = \App\Models\StudentChecklist::where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Monthly appraisal')
+            ->firstOrFail();
+        if ($appraisal->faculty_status === 'approved') {
+            return redirect('/student/monthly-appraisal')->with('error', 'Approved appraisals cannot be edited.');
+        }
+        $validated = $request->validate([
+            'student_appraisal_month'        => 'required|string',
+            'student_appraisal_file'         => 'nullable|file|max:5120',
+            'student_appraisal_feedback'     => 'nullable|string',
+            'student_appraisal_grade_rating' => 'nullable|string',
+            'student_appraisal_evaluated_by' => 'nullable|string',
+        ]);
+        $uploadedFile = $appraisal->student_appraisal_file;
+        if ($request->hasFile('student_appraisal_file') && $request->file('student_appraisal_file')->isValid()) {
+            $uploadedFile = \Illuminate\Support\Facades\Storage::putFile('monthly-appraisals', $request->file('student_appraisal_file'));
+        }
+        $appraisal->update([
+            'student_appraisal_month'        => $validated['student_appraisal_month'],
+            'student_appraisal_file'         => $uploadedFile,
+            'student_appraisal_feedback'     => $validated['student_appraisal_feedback'],
+            'student_appraisal_grade_rating' => $validated['student_appraisal_grade_rating'],
+            'student_appraisal_evaluated_by' => $validated['student_appraisal_evaluated_by'],
+            'student_appraisal_submitted_at' => now(),
+            'faculty_status'                 => 'pending',
+        ]);
+        return redirect('/student/monthly-appraisal')->with('success', 'Monthly appraisal updated successfully.');
+    });
+
+    Route::delete('/monthly-appraisal/{id}', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $appraisal = \App\Models\StudentChecklist::where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Monthly appraisal')
+            ->firstOrFail();
+        if ($appraisal->faculty_status === 'approved') {
+            return redirect('/student/monthly-appraisal')->with('error', 'Approved appraisals cannot be archived.');
+        }
+        $appraisal->delete();
+        return redirect('/student/monthly-appraisal')->with('success', 'Appraisal archived successfully.');
+    });
+
+    Route::post('/monthly-appraisal/{id}/restore', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $appraisal = \App\Models\StudentChecklist::onlyTrashed()
+            ->where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Monthly appraisal')
+            ->firstOrFail();
+        $appraisal->restore();
+        return redirect('/student/monthly-appraisal')->with('success', 'Appraisal restored successfully.');
+    });
+
     Route::get('/supervisor-eval', function () {
         $user = session('user');
         if ($user->role !== 'student') {
@@ -1683,7 +2245,12 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             ->where('item', 'Supervisor evaluation')
             ->orderBy('created_at', 'desc')
             ->get();
-        return view('student.supervisor_eval', ['user' => $user, 'section' => $section, 'entries' => $entries]);
+        $archivedEntries = \App\Models\StudentChecklist::onlyTrashed()
+            ->where('student_id', $user->id)
+            ->where('item', 'Supervisor evaluation')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+        return view('student.supervisor_eval', ['user' => $user, 'section' => $section, 'entries' => $entries, 'archivedEntries' => $archivedEntries]);
     });
 
     Route::get('/supervisor-eval/create', function () {
@@ -1734,6 +2301,81 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         ]);
 
         return redirect('/student/supervisor-eval')->with('success', 'Supervisor evaluation submitted successfully. Pending faculty review.');
+    });
+
+    Route::get('/supervisor-eval/{id}/edit', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $entry = \App\Models\StudentChecklist::where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Supervisor evaluation')
+            ->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/supervisor-eval')->with('error', 'Approved evaluations cannot be edited.');
+        }
+        $section = \App\Models\Section::find($user->section_id);
+        return view('student.supervisor_eval_form', ['user' => $user, 'section' => $section, 'entry' => $entry]);
+    });
+
+    Route::put('/supervisor-eval/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $entry = \App\Models\StudentChecklist::where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Supervisor evaluation')
+            ->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/supervisor-eval')->with('error', 'Approved evaluations cannot be edited.');
+        }
+        $validated = $request->validate([
+            'student_supervisor_eval_file'  => 'nullable|file|max:5120',
+            'student_supervisor_eval_grade' => 'required|string',
+        ]);
+        $uploadedFile = $entry->student_supervisor_eval_file;
+        if ($request->hasFile('student_supervisor_eval_file') && $request->file('student_supervisor_eval_file')->isValid()) {
+            $uploadedFile = \Illuminate\Support\Facades\Storage::putFile('supervisor-evals', $request->file('student_supervisor_eval_file'));
+        }
+        $entry->update([
+            'student_supervisor_eval_file'         => $uploadedFile,
+            'student_supervisor_eval_grade'        => $validated['student_supervisor_eval_grade'],
+            'student_supervisor_eval_submitted_at' => now(),
+            'faculty_status'                       => 'pending',
+        ]);
+        return redirect('/student/supervisor-eval')->with('success', 'Supervisor evaluation updated successfully.');
+    });
+
+    Route::delete('/supervisor-eval/{id}', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $entry = \App\Models\StudentChecklist::where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Supervisor evaluation')
+            ->firstOrFail();
+        if ($entry->faculty_status === 'approved') {
+            return redirect('/student/supervisor-eval')->with('error', 'Approved evaluations cannot be archived.');
+        }
+        $entry->delete();
+        return redirect('/student/supervisor-eval')->with('success', 'Evaluation archived successfully.');
+    });
+
+    Route::post('/supervisor-eval/{id}/restore', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        $entry = \App\Models\StudentChecklist::onlyTrashed()
+            ->where('id', $id)
+            ->where('student_id', $user->id)
+            ->where('item', 'Supervisor evaluation')
+            ->firstOrFail();
+        $entry->restore();
+        return redirect('/student/supervisor-eval')->with('success', 'Evaluation restored successfully.');
     });
 
     // Certificate of Completion (COC) Routes for Students
@@ -2045,18 +2687,80 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             'location'      => 'required|string|max:255',
             'description'   => 'required|string',
             'action_taken'  => 'nullable|string',
+            'attachment'    => 'nullable|file|max:10240',
         ]);
 
-        \App\Models\IncidentReport::create(array_merge($validated, ['student_id' => $user->id]));
+        $attachmentPath = null;
+        if ($request->hasFile('attachment') && $request->file('attachment')->isValid()) {
+            $attachmentPath = \Illuminate\Support\Facades\Storage::putFile('incident-attachments', $request->file('attachment'));
+        }
+
+        \App\Models\IncidentReport::create([
+            'student_id'    => $user->id,
+            'section_id'    => $user->section_id,
+            'type'          => $validated['type'],
+            'incident_date' => $validated['incident_date'],
+            'location'      => $validated['location'],
+            'description'   => $validated['description'],
+            'action_taken'  => $validated['action_taken'] ?? null,
+            'attachment'    => $attachmentPath,
+            'faculty_status' => 'pending',
+        ]);
 
         return redirect('/student/incident-report')->with('success', 'Incident report submitted successfully.');
+    });
+
+    Route::put('/incident-report/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $report = \App\Models\IncidentReport::where('student_id', $user->id)->findOrFail($id);
+        if ($report->faculty_status !== 'pending') {
+            return redirect('/student/incident-report')->with('error', 'Cannot edit a report that is already being reviewed.');
+        }
+
+        $validated = $request->validate([
+            'type'          => 'required|string',
+            'incident_date' => 'required|date',
+            'location'      => 'required|string|max:255',
+            'description'   => 'required|string',
+            'action_taken'  => 'nullable|string',
+            'attachment'    => 'nullable|file|max:10240',
+        ]);
+
+        if ($request->hasFile('attachment') && $request->file('attachment')->isValid()) {
+            $validated['attachment'] = \Illuminate\Support\Facades\Storage::putFile('incident-attachments', $request->file('attachment'));
+        } else {
+            unset($validated['attachment']);
+        }
+
+        $validated['section_id'] = $user->section_id;
+
+        $report->update($validated);
+
+        return redirect('/student/incident-report')->with('success', 'Incident report updated successfully.');
+    });
+
+    Route::delete('/incident-report/{id}', function ($id) {
+        $user = session('user');
+        if ($user->role !== 'student') return redirect('/admin/dashboard');
+
+        $report = \App\Models\IncidentReport::where('student_id', $user->id)->findOrFail($id);
+        if ($report->faculty_status !== 'pending') {
+            return redirect('/student/incident-report')->with('error', 'Cannot delete a report that is already being reviewed.');
+        }
+
+        $report->delete();
+
+        return redirect('/student/incident-report')->with('success', 'Incident report deleted.');
     });
 
     // FAQ
     Route::get('/faq', function () {
         $user = session('user');
         if ($user->role !== 'student') return redirect('/admin/dashboard');
-        return view('student.faq', ['user' => $user, 'faqs' => []]);
+        $faqs = \App\Models\Faq::latest()->get();
+        return view('student.faq', ['user' => $user, 'faqs' => $faqs]);
     });
 
     // Chatbot AI

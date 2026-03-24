@@ -58,6 +58,14 @@
                             <a href="/student/dtr/{{ $entry->id }}/edit" class="btn btn-sm btn-outline-warning">
                                 <i class="fas fa-edit"></i> Edit
                             </a>
+                            <form method="POST" action="/student/dtr/{{ $entry->id }}" class="d-inline"
+                                onsubmit="return confirm('Archive this DTR entry? You can restore it later.')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-archive"></i> Archive
+                                </button>
+                            </form>
                             @endif
                         </td>
                     </tr>
@@ -119,9 +127,54 @@
         <a href="/student/dtr/create" class="alert-link">Submit your first DTR now.</a>
     </div>
     @endif
+
+    {{-- Archived DTR Section --}}
+    @if($archivedDtrEntries->count() > 0)
+    <div class="card mt-4">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Archived DTR ({{ $archivedDtrEntries->count() }})</h5>
+        <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#archivedDtrList">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </div>
+    <div class="collapse" id="archivedDtrList">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Week</th>
+                        <th>Hours</th>
+                        <th>Validated by</th>
+                        <th>Archived On</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($archivedDtrEntries as $archived)
+                    <tr class="table-secondary">
+                        <td><strong>{{ $archived->student_dtr_week ?? '—' }}</strong></td>
+                        <td><span class="badge bg-secondary">{{ $archived->student_dtr_hours ?? 0 }} hrs</span></td>
+                        <td>{{ $archived->student_dtr_validated_by ?? '—' }}</td>
+                        <td>{{ $archived->deleted_at?->format('M d, Y g:i A') ?? '—' }}</td>
+                        <td>
+                            <form method="POST" action="/student/dtr/{{ $archived->id }}/restore" class="d-inline">
+                                @csrf
+                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                    <i class="fas fa-undo"></i> Restore
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+    @endif
+
 </div>
 
-{{-- Modals — outside the table to avoid invalid HTML nesting --}}
 @foreach($dtrEntries as $entry)
 <div class="modal fade" id="dtrModal{{ $entry->id }}" tabindex="-1">
     <div class="modal-dialog modal-lg">

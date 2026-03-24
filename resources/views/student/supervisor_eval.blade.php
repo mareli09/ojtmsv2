@@ -17,6 +17,12 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     @endif
+    @if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
 
     @if(empty($entries) || $entries->count() == 0)
     <div class="alert alert-info">
@@ -33,6 +39,7 @@
                         <th>Grade/Rating</th>
                         <th>File</th>
                         <th>Faculty Status</th>
+                        <th>Faculty Feedback</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -55,9 +62,26 @@
                             <span class="badge bg-{{ $sc }}">{{ ucfirst($entry->faculty_status ?? 'pending') }}</span>
                         </td>
                         <td>
+                            @php $fb = $entry->faculty_supervisor_eval_remarks ?? $entry->faculty_remarks ?? null; @endphp
+                            <small class="text-muted">{{ $fb ? Str::limit($fb, 40) : '—' }}</small>
+                        </td>
+                        <td>
                             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#evalModal{{ $entry->id }}">
                                 <i class="fas fa-eye"></i> View
                             </button>
+                            @if($entry->faculty_status !== 'approved')
+                            <a href="/student/supervisor-eval/{{ $entry->id }}/edit" class="btn btn-sm btn-outline-warning">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            <form method="POST" action="/student/supervisor-eval/{{ $entry->id }}" class="d-inline"
+                                onsubmit="return confirm('Archive this evaluation? You can restore it later.')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-archive"></i> Archive
+                                </button>
+                            </form>
+                            @endif
                         </td>
                     </tr>
                     @endforeach
@@ -66,6 +90,50 @@
         </div>
     </div>
     @endif
+
+    {{-- Archived Section --}}
+    @if($archivedEntries->count() > 0)
+    <div class="card mt-4">
+        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Archived Evaluations ({{ $archivedEntries->count() }})</h5>
+            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#archivedEvalList">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
+        <div class="collapse" id="archivedEvalList">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date Submitted</th>
+                            <th>Grade/Rating</th>
+                            <th>Archived On</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($archivedEntries as $archived)
+                        <tr class="table-secondary">
+                            <td>{{ $archived->student_supervisor_eval_submitted_at?->format('M d, Y') ?? '—' }}</td>
+                            <td>{{ $archived->student_supervisor_eval_grade ?? '—' }}</td>
+                            <td>{{ $archived->deleted_at?->format('M d, Y g:i A') ?? '—' }}</td>
+                            <td>
+                                <form method="POST" action="/student/supervisor-eval/{{ $archived->id }}/restore" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-undo"></i> Restore
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @endif
+
 </div>
 
 {{-- Modals outside the table --}}
@@ -102,9 +170,10 @@
                     </div>
                     @endif
                 </div>
-                @if($entry->faculty_supervisor_eval_remarks)
+                @php $modalFb = $entry->faculty_supervisor_eval_remarks ?? $entry->faculty_remarks ?? null; @endphp
+                @if($modalFb)
                 <p><strong>Faculty Remarks:</strong></p>
-                <blockquote class="blockquote bg-light p-3 rounded">{{ $entry->faculty_supervisor_eval_remarks }}</blockquote>
+                <blockquote class="blockquote bg-light p-3 rounded">{{ $modalFb }}</blockquote>
                 @else
                 <p class="text-muted small">No faculty remarks yet.</p>
                 @endif

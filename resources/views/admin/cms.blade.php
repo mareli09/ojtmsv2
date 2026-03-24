@@ -211,6 +211,42 @@
                     </div>
                 </div>
 
+                <!-- OpenAI API Settings -->
+                <div class="card mb-4">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0"><i class="fas fa-robot"></i> OpenAI API Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="openai_enabled" name="openai_enabled" value="1"
+                                    {{ ($cms->get('openai_enabled')->value ?? '0') === '1' ? 'checked' : '' }}>
+                                <label class="form-check-label fw-bold" for="openai_enabled">Enable OpenAI Integration</label>
+                            </div>
+                            <small class="form-text text-muted">When disabled, the AI Chatbot and Decision Support features will show an offline message instead of calling the API.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="openai_api_key" class="form-label">OpenAI API Key</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control @error('openai_api_key') is-invalid @enderror"
+                                    id="openai_api_key" name="openai_api_key"
+                                    value="{{ $cms->get('openai_api_key')->value ?? '' }}"
+                                    placeholder="sk-proj-...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleApiKey()">
+                                    <i class="fas fa-eye" id="toggleIcon"></i>
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Your OpenAI API key for AI Chatbot and Decision Support System. Stored securely in the database.</small>
+                            @error('openai_api_key')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Features powered by OpenAI:</strong> Faculty AI Chatbot, Decision Support System (student performance analysis & recommendations).
+                            Disabling will gracefully deactivate these features without errors.
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="mb-4">
                     <button type="submit" class="btn btn-primary">
@@ -362,5 +398,17 @@
         const text = this.value || 'The OJT Monitoring System (OJTMS) is committed...';
         previewAbout.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
     });
+
+    function toggleApiKey() {
+        const input = document.getElementById('openai_api_key');
+        const icon = document.getElementById('toggleIcon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
 </script>
 @endsection

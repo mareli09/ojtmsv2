@@ -15,6 +15,12 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
 
     @if($weeklyReports->count() > 0)
         <div class="card">
@@ -61,6 +67,19 @@
                                     <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#reportModal{{ $report->id }}">
                                         <i class="fas fa-eye"></i> View
                                     </button>
+                                    @if($report->faculty_status !== 'approved')
+                                    <a href="/student/weekly-report/{{ $report->id }}/edit" class="btn btn-sm btn-outline-warning">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <form method="POST" action="/student/weekly-report/{{ $report->id }}" class="d-inline"
+                                        onsubmit="return confirm('Archive this weekly report? You can restore it later.')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-archive"></i> Archive
+                                        </button>
+                                    </form>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach
@@ -74,6 +93,50 @@
             <a href="/student/weekly-report/create" class="alert-link">Submit your first report now.</a>
         </div>
     @endif
+
+    {{-- Archived Weekly Reports Section --}}
+    @if($archivedWeeklyReports->count() > 0)
+    <div class="card mt-4">
+        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Archived Weekly Reports ({{ $archivedWeeklyReports->count() }})</h5>
+            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#archivedReportList">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
+        <div class="collapse" id="archivedReportList">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Week</th>
+                            <th>Task Summary</th>
+                            <th>Archived On</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($archivedWeeklyReports as $archived)
+                        <tr class="table-secondary">
+                            <td><strong>{{ $archived->student_weekly_week ?? '—' }}</strong></td>
+                            <td><small>{{ Str::limit($archived->student_weekly_task_description ?? '—', 50) }}</small></td>
+                            <td>{{ $archived->deleted_at?->format('M d, Y g:i A') ?? '—' }}</td>
+                            <td>
+                                <form method="POST" action="/student/weekly-report/{{ $archived->id }}/restore" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-undo"></i> Restore
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @endif
+
 </div>
 
 {{-- Modals outside the table --}}

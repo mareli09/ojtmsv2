@@ -1,19 +1,30 @@
 @extends('layouts.student')
 
-@section('title', 'Submit Monthly Appraisal')
+@section('title', isset($appraisal) ? 'Edit Monthly Appraisal' : 'Submit Monthly Appraisal')
 
 @section('content')
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-plus-circle"></i> Submit Monthly Appraisal</h2>
+        <h2><i class="fas fa-{{ isset($appraisal) ? 'edit' : 'plus-circle' }}"></i>
+            {{ isset($appraisal) ? 'Edit Monthly Appraisal — ' . $appraisal->student_appraisal_month : 'Submit Monthly Appraisal' }}
+        </h2>
         <a href="/student/monthly-appraisal" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Appraisals</a>
     </div>
+
+    @if(isset($appraisal) && $appraisal->faculty_status === 'declined')
+    <div class="alert alert-danger">
+        <i class="fas fa-times-circle"></i> <strong>Revision Needed.</strong>
+        @php $declineReason = $appraisal->faculty_appraisal_remarks ?? $appraisal->faculty_remarks ?? null; @endphp
+        @if($declineReason) Reason: <em>{{ $declineReason }}</em>@endif
+        Please correct and resubmit below.
+    </div>
+    @endif
 
     <div class="row">
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Monthly Appraisal Submission</h5>
+                    <h5 class="mb-0">{{ isset($appraisal) ? 'Update Monthly Appraisal' : 'Monthly Appraisal Submission' }}</h5>
                 </div>
                 <div class="card-body">
                     @if($errors->any())
@@ -28,13 +39,18 @@
                         </div>
                     @endif
 
-                    <form method="POST" action="/student/monthly-appraisal" enctype="multipart/form-data">
+                    <form method="POST"
+                          action="{{ isset($appraisal) ? '/student/monthly-appraisal/' . $appraisal->id : '/student/monthly-appraisal' }}"
+                          enctype="multipart/form-data">
                         @csrf
+                        @if(isset($appraisal)) @method('PUT') @endif
 
                         <div class="mb-3">
                             <label for="student_appraisal_month" class="form-label">Month <span class="text-danger">*</span></label>
-                            <input type="text" id="student_appraisal_month" name="student_appraisal_month" class="form-control @error('student_appraisal_month') is-invalid @enderror" 
-                                placeholder="e.g., March, January 2026, March 2026..." value="{{ old('student_appraisal_month') }}" required>
+                            <input type="text" id="student_appraisal_month" name="student_appraisal_month"
+                                class="form-control @error('student_appraisal_month') is-invalid @enderror"
+                                placeholder="e.g., March, January 2026, March 2026..."
+                                value="{{ old('student_appraisal_month', $appraisal->student_appraisal_month ?? '') }}" required>
                             <small class="form-text text-muted">Specify which month/period this appraisal covers</small>
                             @error('student_appraisal_month')
                                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -43,8 +59,9 @@
 
                         <div class="mb-3">
                             <label for="student_appraisal_feedback" class="form-label">Your Feedback/Comments (Optional)</label>
-                            <textarea id="student_appraisal_feedback" name="student_appraisal_feedback" class="form-control @error('student_appraisal_feedback') is-invalid @enderror" 
-                                rows="4" placeholder="Any personal thoughts, challenges faced, skills developed, or self-assessment...">{{ old('student_appraisal_feedback') }}</textarea>
+                            <textarea id="student_appraisal_feedback" name="student_appraisal_feedback"
+                                class="form-control @error('student_appraisal_feedback') is-invalid @enderror"
+                                rows="4" placeholder="Any personal thoughts, challenges faced, skills developed, or self-assessment...">{{ old('student_appraisal_feedback', $appraisal->student_appraisal_feedback ?? '') }}</textarea>
                             <small class="form-text text-muted">Share your self-assessment and feedback on your performance this month.</small>
                             @error('student_appraisal_feedback')
                                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -53,9 +70,10 @@
 
                         <div class="mb-3">
                             <label for="student_appraisal_grade_rating" class="form-label">Grade or Rating (Optional)</label>
-                            <input type="text" id="student_appraisal_grade_rating" name="student_appraisal_grade_rating" class="form-control @error('student_appraisal_grade_rating') is-invalid @enderror" 
-                                placeholder="e.g., A, B+, 85%, Excellent, Good, Satisfactory..." value="{{ old('student_appraisal_grade_rating') }}">
-                            <small class="form-text text-muted">Enter your grade/rating for this period (e.g., A, B+, 85%, or descriptive term)</small>
+                            <input type="text" id="student_appraisal_grade_rating" name="student_appraisal_grade_rating"
+                                class="form-control @error('student_appraisal_grade_rating') is-invalid @enderror"
+                                placeholder="e.g., A, B+, 85%, Excellent, Good, Satisfactory..."
+                                value="{{ old('student_appraisal_grade_rating', $appraisal->student_appraisal_grade_rating ?? '') }}">
                             @error('student_appraisal_grade_rating')
                                 <div class="invalid-feedback d-block">{{ $message }}</div>
                             @enderror
@@ -63,9 +81,10 @@
 
                         <div class="mb-3">
                             <label for="student_appraisal_evaluated_by" class="form-label">Evaluated by (Supervisor Name) (Optional)</label>
-                            <input type="text" id="student_appraisal_evaluated_by" name="student_appraisal_evaluated_by" class="form-control @error('student_appraisal_evaluated_by') is-invalid @enderror" 
-                                placeholder="Your supervisor or evaluator's name" value="{{ old('student_appraisal_evaluated_by') }}">
-                            <small class="form-text text-muted">Name of the person who evaluated your performance</small>
+                            <input type="text" id="student_appraisal_evaluated_by" name="student_appraisal_evaluated_by"
+                                class="form-control @error('student_appraisal_evaluated_by') is-invalid @enderror"
+                                placeholder="Your supervisor or evaluator's name"
+                                value="{{ old('student_appraisal_evaluated_by', $appraisal->student_appraisal_evaluated_by ?? '') }}">
                             @error('student_appraisal_evaluated_by')
                                 <div class="invalid-feedback d-block">{{ $message }}</div>
                             @enderror
@@ -73,12 +92,20 @@
 
                         <div class="mb-3">
                             <label for="student_appraisal_file" class="form-label">Upload Appraisal Document (Optional)</label>
-                            <input type="file" id="student_appraisal_file" name="student_appraisal_file" class="form-control @error('student_appraisal_file') is-invalid @enderror" 
+                            <input type="file" id="student_appraisal_file" name="student_appraisal_file"
+                                class="form-control @error('student_appraisal_file') is-invalid @enderror"
                                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx">
+                            @if(isset($appraisal) && $appraisal->student_appraisal_file)
+                            <small class="text-muted">
+                                Current file: {{ basename($appraisal->student_appraisal_file) }}
+                                — upload a new file to replace it.
+                            </small>
+                            @else
                             <small class="form-text text-muted">
-                                <i class="fas fa-info-circle"></i> Single file upload. Max 5MB. 
+                                <i class="fas fa-info-circle"></i> Single file upload. Max 5MB.
                                 Supported: PDF, DOC, DOCX, JPG, PNG, XLSX
                             </small>
+                            @endif
                             @error('student_appraisal_file')
                                 <div class="invalid-feedback d-block">{{ $message }}</div>
                             @enderror
@@ -86,7 +113,9 @@
                         </div>
 
                         <div class="mb-3">
-                            <button type="submit" class="btn btn-success"><i class="fas fa-paper-plane"></i> Submit Appraisal</button>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-paper-plane"></i> {{ isset($appraisal) ? 'Update Appraisal' : 'Submit Appraisal' }}
+                            </button>
                             <a href="/student/monthly-appraisal" class="btn btn-secondary"><i class="fas fa-times"></i> Cancel</a>
                         </div>
                     </form>
@@ -113,19 +142,6 @@
                         <li><strong>Document:</strong> Supporting appraisal form</li>
                     </ul>
 
-                    <h6 class="mt-3">What to Include:</h6>
-                    <ul class="small">
-                        <li>Accomplishments and achievements</li>
-                        <li>Challenges and how you overcame them</li>
-                        <li>Skills acquired or improved</li>
-                        <li>Goals for next month</li>
-                        <li>Supervisor's formal evaluation (if available)</li>
-                    </ul>
-
-                    <div class="alert alert-info mt-3" role="alert">
-                        <strong>Note:</strong> Faculty will review your appraisal and provide feedback. Most fields are optional, allowing flexibility in submission format.
-                    </div>
-
                     <h6 class="mt-3">Rating Scale Examples:</h6>
                     <ul class="small">
                         <li>Letter grades: A, B+, B, C+, C</li>
@@ -133,6 +149,10 @@
                         <li>Descriptive: Excellent, Good, Satisfactory, Needs Improvement</li>
                         <li>Numeric: 5/5, 4/5, 3/5</li>
                     </ul>
+
+                    <div class="alert alert-info mt-3" role="alert">
+                        <strong>Note:</strong> Faculty will review your appraisal and provide feedback.
+                    </div>
                 </div>
             </div>
         </div>
@@ -140,11 +160,9 @@
 </div>
 
 <script>
-    // File preview
     document.getElementById('student_appraisal_file').addEventListener('change', function(e) {
         const preview = document.getElementById('filePreview');
         preview.innerHTML = '';
-        
         if (this.files.length > 0) {
             const file = this.files[0];
             const size = (file.size / 1024).toFixed(2);

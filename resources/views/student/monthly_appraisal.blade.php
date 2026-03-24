@@ -15,6 +15,12 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
 
     @if($appraisals->count() > 0)
         <div class="card">
@@ -68,8 +74,9 @@
                                     @endif
                                 </td>
                                 <td>
-                                    @if($appraisal->faculty_appraisal_remarks)
-                                        <small class="text-muted">{{ Str::limit($appraisal->faculty_appraisal_remarks, 40) }}</small>
+                                    @php $feedback = $appraisal->faculty_appraisal_remarks ?? $appraisal->faculty_remarks ?? null; @endphp
+                                    @if($feedback)
+                                        <small class="text-muted">{{ Str::limit($feedback, 40) }}</small>
                                     @else
                                         <small class="text-muted">—</small>
                                     @endif
@@ -79,6 +86,19 @@
                                     <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#appraisalModal{{ $appraisal->id }}">
                                         <i class="fas fa-eye"></i> View
                                     </button>
+                                    @if($appraisal->faculty_status !== 'approved')
+                                    <a href="/student/monthly-appraisal/{{ $appraisal->id }}/edit" class="btn btn-sm btn-outline-warning">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <form method="POST" action="/student/monthly-appraisal/{{ $appraisal->id }}" class="d-inline"
+                                        onsubmit="return confirm('Archive this appraisal? You can restore it later.')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-archive"></i> Archive
+                                        </button>
+                                    </form>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach
@@ -92,6 +112,50 @@
             <a href="/student/monthly-appraisal/create" class="alert-link">Submit your first appraisal now.</a>
         </div>
     @endif
+
+    {{-- Archived Appraisals Section --}}
+    @if($archivedAppraisals->count() > 0)
+    <div class="card mt-4">
+        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Archived Appraisals ({{ $archivedAppraisals->count() }})</h5>
+            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#archivedAppraisalList">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
+        <div class="collapse" id="archivedAppraisalList">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Month</th>
+                            <th>Grade/Rating</th>
+                            <th>Archived On</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($archivedAppraisals as $archived)
+                        <tr class="table-secondary">
+                            <td><strong>{{ $archived->student_appraisal_month ?? '—' }}</strong></td>
+                            <td>{{ $archived->student_appraisal_grade_rating ?? '—' }}</td>
+                            <td>{{ $archived->deleted_at?->format('M d, Y g:i A') ?? '—' }}</td>
+                            <td>
+                                <form method="POST" action="/student/monthly-appraisal/{{ $archived->id }}/restore" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-undo"></i> Restore
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @endif
+
 </div>
 
 {{-- Modals outside the table --}}
@@ -135,9 +199,10 @@
                     @else <span class="badge bg-warning">Pending Review</span>
                     @endif
                 </p>
-                @if($appraisal->faculty_appraisal_remarks)
+                @php $modalFeedback = $appraisal->faculty_appraisal_remarks ?? $appraisal->faculty_remarks ?? null; @endphp
+                @if($modalFeedback)
                 <p><strong>Faculty Feedback:</strong></p>
-                <div class="bg-light p-3 rounded">{{ $appraisal->faculty_appraisal_remarks }}</div>
+                <div class="bg-light p-3 rounded">{{ $modalFeedback }}</div>
                 <small class="text-muted">Reviewed: {{ $appraisal->faculty_appraisal_reviewed_at?->format('M d, Y g:i A') ?? 'N/A' }}</small>
                 @else
                 <p class="text-muted small">Awaiting faculty feedback...</p>

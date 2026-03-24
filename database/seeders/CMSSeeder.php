@@ -78,6 +78,16 @@ class CMSSeeder extends Seeder
                 'value' => 'https://youtube.com',
                 'section' => 'social_media',
             ],
+            [
+                'key' => 'openai_api_key',
+                'value' => '',
+                'section' => 'openai',
+            ],
+            [
+                'key' => 'openai_enabled',
+                'value' => '1',
+                'section' => 'openai',
+            ],
         ];
 
         foreach ($cmsSettings as $setting) {

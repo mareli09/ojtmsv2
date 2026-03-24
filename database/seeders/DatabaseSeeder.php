@@ -315,6 +315,9 @@ class DatabaseSeeder extends Seeder
         
         // Seed Announcements
         $this->call(AnnouncementSeeder::class);
+
+        // Seed FAQs
+        $this->call(FaqSeeder::class);
         
         // Summary of test accounts
         \Log::info('======== DATABASE SEEDING COMPLETE ========');
