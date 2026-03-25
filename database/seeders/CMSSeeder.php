@@ -80,7 +80,7 @@ class CMSSeeder extends Seeder
             ],
             [
                 'key' => 'openai_api_key',
-                'value' => '',
+                'value' => '', // Set your OpenAI API key via Admin → CMS Settings
                 'section' => 'openai',
             ],
             [
