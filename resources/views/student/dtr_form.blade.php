@@ -9,7 +9,7 @@
         <a href="/student/dtr" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to DTR</a>
     </div>
 
-    @if($entry->faculty_status === 'declined' ?? false)
+    @if(isset($entry) && $entry->faculty_status === 'declined')
     <div class="alert alert-danger">
         <i class="fas fa-times-circle"></i> <strong>Declined.</strong>
         @if($entry->faculty_remarks) Reason: <em>{{ $entry->faculty_remarks }}</em>@endif

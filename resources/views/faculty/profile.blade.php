@@ -9,6 +9,8 @@
     <a href="/faculty/reports" class="nav-link"><i class="fas fa-file-alt"></i> Reports</a>
     <a href="/faculty/faqs" class="nav-link"><i class="fas fa-question-circle"></i> FAQ Management</a>
     <a href="/faculty/announcements" class="nav-link"><i class="fas fa-bullhorn"></i> Announcements</a>
+    <a href="/faculty/chatbot" class="nav-link"><i class="fas fa-robot"></i> AI Chatbot</a>
+    <a href="/faculty/decision-support" class="nav-link"><i class="fas fa-brain"></i> Decision Support</a>
     <a href="/faculty/profile" class="nav-link active"><i class="fas fa-user-cog"></i> Profile Settings</a>
     <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
 @endsection

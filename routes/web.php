@@ -1508,21 +1508,62 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         $request->validate(['message' => 'required|string|max:2000']);
 
         // Gather context for the AI
-        $sections = \App\Models\Section::where('faculty_id', $user->id)->with('students')->get();
+        $sections = \App\Models\Section::where('faculty_id', $user->id)->get();
         $sectionIds = $sections->pluck('id');
-        $studentIds = \App\Models\User::whereIn('section_id', $sectionIds)->pluck('id');
+        $students = \App\Models\User::whereIn('section_id', $sectionIds)->where('role', 'student')->get();
+        $studentIds = $students->pluck('id');
         $totalStudents = $studentIds->count();
         $allEntries = \App\Models\StudentChecklist::whereIn('student_id', $studentIds)->get();
         $pendingReview = $allEntries->where('faculty_status', 'pending')->count();
         $incidentCount = \App\Models\IncidentReport::whereIn('section_id', $sectionIds)->where('faculty_status', 'pending')->count();
 
-        $systemPrompt = "You are an AI assistant for a faculty member in an OJT (On-the-Job Training) Monitoring System. "
-            . "Faculty: {$user->first_name} {$user->last_name}. "
-            . "They handle " . $sections->count() . " section(s) with {$totalStudents} students total. "
-            . "There are {$pendingReview} pending submission reviews and {$incidentCount} pending incident reports. "
-            . "Help them with OJT management: student performance analysis, review priorities, checklist guidance, "
-            . "best practices for evaluating student submissions, and OJT process questions. "
-            . "Keep responses concise and practical. You may suggest actions they can take in the system.";
+        // Build per-student data summary
+        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
+        $studentSummaries = [];
+        foreach ($students as $s) {
+            $entries = $allEntries->where('student_id', $s->id);
+            $approved = $entries->where('faculty_status', 'approved')->count();
+            $pending  = $entries->where('faculty_status', 'pending')->count();
+            $declined = $entries->where('faculty_status', 'declined')->count();
+            $dtrHours = $entries->where('item', 'DTR')->where('faculty_status', 'approved')->sum('student_dtr_hours');
+            $targetHours = $entries->where('item', 'DTR')->max('faculty_dtr_target_hours') ?? 486;
+            $completedItems = 0;
+            $completedList = [];
+            $incompleteList = [];
+            foreach ($checklistItems as $item) {
+                if ($entries->where('item', $item)->where('faculty_status', 'approved')->count() > 0) {
+                    $completedItems++;
+                    $completedList[] = $item;
+                } else {
+                    $incompleteList[] = $item;
+                }
+            }
+            $sectionName = $sections->firstWhere('id', $s->section_id)?->name ?? 'N/A';
+            $studentSummaries[] = "- {$s->first_name} {$s->last_name} (ID: {$s->student_id}, Section: {$sectionName}): "
+                . "Checklist {$completedItems}/10, DTR hours {$dtrHours}/{$targetHours}, "
+                . "Approved {$approved}, Pending {$pending}, Declined {$declined}. "
+                . "Completed: " . (empty($completedList) ? 'None' : implode(', ', $completedList)) . ". "
+                . "Incomplete: " . (empty($incompleteList) ? 'None' : implode(', ', $incompleteList)) . ".";
+        }
+        $studentDataText = implode("\n", $studentSummaries);
+
+        $systemPrompt = "You are an AI assistant for the OJT Monitoring System (OJTMS). "
+            . "You help faculty with anything related to OJT, internships, students, their performance, "
+            . "checklist management, DTR tracking, weekly reports, monthly appraisals, supervisor evaluations, "
+            . "incident reports, and the OJTMS platform. "
+            . "Questions about students by name, their progress, completion status, who is complete or incomplete, "
+            . "rankings, section info, and any education/internship topic are ALL valid OJT questions — always answer them. "
+            . "Only refuse questions that are CLEARLY unrelated to OJT, education, or this system "
+            . "(e.g., cooking recipes, movie recommendations, games, personal life advice). "
+            . "For those, briefly say: 'That topic is outside my scope. I can help with OJT-related questions — student progress, reviews, checklists, and more.' "
+            . "\n\nFaculty: {$user->first_name} {$user->last_name}. "
+            . "Sections handled: " . $sections->pluck('name')->implode(', ') . " (" . $sections->count() . " section(s)). "
+            . "Total students: {$totalStudents}. "
+            . "Pending submission reviews: {$pendingReview}. Pending incident reports: {$incidentCount}. "
+            . "\n\nSTUDENT DATA:\n{$studentDataText}"
+            . "\n\nUse this data to answer questions about specific students, progress, completion, rankings, etc. "
+            . "Keep responses concise and practical.";
 
         $messages = $request->input('history', []);
         array_unshift($messages, ['role' => 'system', 'content' => $systemPrompt]);
@@ -2767,7 +2808,97 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
     Route::get('/chatbot', function () {
         $user = session('user');
         if ($user->role !== 'student') return redirect('/admin/dashboard');
-        return view('student.chatbot', ['user' => $user]);
+        $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
+        return view('student.chatbot', compact('user', 'aiEnabled'));
+    });
+
+    Route::post('/chatbot/ask', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') return response()->json(['error' => 'Unauthorized'], 403);
+
+        $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
+        $apiKey    = \App\Models\CMS::getValue('openai_api_key');
+        if (!$aiEnabled || !$apiKey) {
+            return response()->json(['reply' => 'AI features are currently disabled by the administrator. The basic keyword chatbot is still available.']);
+        }
+
+        $request->validate(['message' => 'required|string|max:2000']);
+
+        // Gather student context
+        $section = \App\Models\Section::find($user->section_id);
+        $faculty = $section ? $section->faculty : null;
+        $entries = \App\Models\StudentChecklist::where('student_id', $user->id)->get();
+
+        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
+        $completedList = [];
+        $incompleteList = [];
+        foreach ($checklistItems as $item) {
+            if ($entries->where('item', $item)->where('faculty_status', 'approved')->count() > 0) {
+                $completedList[] = $item;
+            } else {
+                $incompleteList[] = $item;
+            }
+        }
+        $dtrHours = $entries->where('item', 'DTR')->where('faculty_status', 'approved')->sum('student_dtr_hours');
+        $targetHours = $entries->where('item', 'DTR')->max('faculty_dtr_target_hours') ?? 486;
+        $pendingCount = $entries->where('faculty_status', 'pending')->count();
+        $declinedCount = $entries->where('faculty_status', 'declined')->count();
+
+        $systemPrompt = "You are an AI assistant for a student using the OJT Monitoring System (OJTMS). "
+            . "You help students with anything related to OJT, internships, their checklist, submissions, "
+            . "DTR tracking, weekly reports, monthly appraisals, supervisor evaluations, incident reports, "
+            . "FAQs, announcements, profile settings, and how to use the OJTMS platform. "
+            . "Questions about their progress, what's left to do, how to submit things, and OJT policies are all valid. "
+            . "Only refuse questions that are CLEARLY unrelated to OJT, education, or this system "
+            . "(e.g., cooking recipes, movie recommendations, games). "
+            . "For those, briefly say: 'That topic is outside my scope. I can help with OJT-related questions — your checklist, submissions, DTR, and more.' "
+            . "\n\nStudent: {$user->first_name} {$user->last_name} (ID: {$user->student_id}). "
+            . "Section: " . ($section->name ?? 'N/A') . ". "
+            . "Faculty: " . ($faculty ? $faculty->first_name . ' ' . $faculty->last_name : 'Not assigned') . ". "
+            . "Checklist completed: " . count($completedList) . "/10. "
+            . "Completed items: " . (empty($completedList) ? 'None' : implode(', ', $completedList)) . ". "
+            . "Incomplete items: " . (empty($incompleteList) ? 'None' : implode(', ', $incompleteList)) . ". "
+            . "DTR hours: {$dtrHours}/{$targetHours}. "
+            . "Pending reviews: {$pendingCount}. Declined submissions: {$declinedCount}. "
+            . "\n\nKeep responses concise and helpful. Guide the student on how to use the system.";
+
+        $messages = $request->input('history', []);
+        array_unshift($messages, ['role' => 'system', 'content' => $systemPrompt]);
+        $messages[] = ['role' => 'user', 'content' => $request->input('message')];
+
+        try {
+            $ch = curl_init('https://api.openai.com/v1/chat/completions');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey,
+                ],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'model' => 'gpt-4o-mini',
+                    'messages' => $messages,
+                    'max_tokens' => 1000,
+                    'temperature' => 0.7,
+                ]),
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200) {
+                $errBody = json_decode($response, true);
+                return response()->json(['reply' => 'API Error: ' . ($errBody['error']['message'] ?? 'HTTP ' . $httpCode)]);
+            }
+
+            $data = json_decode($response, true);
+            $reply = $data['choices'][0]['message']['content'] ?? 'No response from AI.';
+            return response()->json(['reply' => $reply]);
+        } catch (\Exception $e) {
+            return response()->json(['reply' => 'Error connecting to AI: ' . $e->getMessage()]);
+        }
     });
 
     // Profile Settings
