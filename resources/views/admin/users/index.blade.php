@@ -149,6 +149,7 @@
                                 <a href="{{ route('users.edit', $user->id) }}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
+                                @if($user->role !== 'admin')
                                 <form action="{{ route('users.destroy', $user->id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Archive this user?');">
                                     @csrf
                                     @method('DELETE')
@@ -156,6 +157,7 @@
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </form>
+                                @endif
                             </td>
                         </tr>
                         @endforeach

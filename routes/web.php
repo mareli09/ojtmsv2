@@ -418,7 +418,11 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
     
     Route::delete('/users/{id}', function ($id) {
         $user = \App\Models\User::findOrFail($id);
-        
+
+        if ($user->role === 'admin') {
+            return redirect('/admin/users')->with('error', 'The system admin account cannot be deleted.');
+        }
+
         // If this is a faculty user assigned to a section, clear the section's faculty_id
         if ($user->role === 'faculty' && $user->section_id) {
             $section = Section::find($user->section_id);
@@ -426,7 +430,7 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
                 $section->update(['faculty_id' => null]);
             }
         }
-        
+
         $user->delete();
         return redirect('/admin/users')->with('success', 'User archived!');
     })->name('users.destroy');
@@ -945,7 +949,7 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         $declinedCount    = $allEntries->where('faculty_status', 'declined')->count();
         $pendingIncidents = $incidents->where('faculty_status', 'pending')->count();
 
-        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+        $checklistItems = ['Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA',
             'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
 
         // Per-item submission stats
@@ -1518,7 +1522,7 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         $incidentCount = \App\Models\IncidentReport::whereIn('section_id', $sectionIds)->where('faculty_status', 'pending')->count();
 
         // Build per-student data summary
-        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+        $checklistItems = ['Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA',
             'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
         $studentSummaries = [];
         foreach ($students as $s) {
@@ -1616,7 +1620,7 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         $allEntries = \App\Models\StudentChecklist::whereIn('student_id', $students->pluck('id'))->get();
         $incidents = \App\Models\IncidentReport::whereIn('section_id', $sectionIds)->get();
 
-        $checklistItems = ['Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+        $checklistItems = ['Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA',
             'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion'];
 
         $studentData = [];
@@ -1743,7 +1747,7 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
 
         // Checklist completion: 10 items, check if each has at least one approved entry
         $checklistItems = [
-            'Medical record', 'Receipt of OJT kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA',
             'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation', 'Certificate of completion',
         ];
         $completedItems = [];
