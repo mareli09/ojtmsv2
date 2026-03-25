@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gantt Chart — OJT Monitoring System</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #fff;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    padding: 40px;
+  }
+  h2 {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  p.caption {
+    text-align: center;
+    font-size: 13px;
+    margin-bottom: 24px;
+    color: #333;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  /* Year header row */
+  th.year {
+    background: #fff;
+    font-weight: bold;
+    font-size: 13px;
+    text-align: center;
+    border: 1px solid #000;
+    padding: 6px 4px;
+  }
+
+  /* Month header row */
+  th.month {
+    background: #fff;
+    font-weight: bold;
+    font-size: 12px;
+    text-align: center;
+    border: 1px solid #000;
+    padding: 6px 4px;
+    min-width: 72px;
+  }
+
+  /* Phase label column */
+  td.phase {
+    font-weight: bold;
+    font-size: 13px;
+    padding: 10px 14px;
+    border: 1px solid #000;
+    white-space: nowrap;
+    background: #fff;
+    min-width: 130px;
+  }
+
+  /* Empty cell */
+  td.empty {
+    border: 1px solid #000;
+    background: #fff;
+    padding: 10px 4px;
+  }
+
+  /* Filled cell (phase active) */
+  td.filled {
+    border: 1px solid #000;
+    background: #000;
+    padding: 10px 4px;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    margin-top: 18px;
+    font-size: 13px;
+    justify-content: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend-box {
+    width: 28px;
+    height: 18px;
+    border: 1px solid #000;
+  }
+  .legend-box.fin  { background: #000; }
+  .legend-box.unfin { background: #fff; }
+
+  .note {
+    text-align: center;
+    font-size: 12px;
+    color: #666;
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h2>Table 3.1: Gantt Chart</h2>
+<p class="caption">AI-Assisted OJT Monitoring System — Project Timeline</p>
+
+<table>
+  <!-- ── Year header ── -->
+  <thead>
+    <tr>
+      <th class="year" rowspan="2" style="min-width:130px;">Phase</th>
+      <th class="year" colspan="2">2025</th>
+      <th class="year" colspan="4">2026</th>
+    </tr>
+    <!-- ── Month header ── -->
+    <tr>
+      <th class="month">November</th>
+      <th class="month">December</th>
+      <th class="month">January</th>
+      <th class="month">February</th>
+      <th class="month">March</th>
+      <th class="month">April</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <!-- Plan: Nov 2025 → Mar 2026 -->
+    <tr>
+      <td class="phase">1. Plan</td>
+      <td class="filled"></td><!-- Nov -->
+      <td class="filled"></td><!-- Dec -->
+      <td class="filled"></td><!-- Jan -->
+      <td class="filled"></td><!-- Feb -->
+      <td class="filled"></td><!-- Mar -->
+      <td class="empty"></td> <!-- Apr -->
+    </tr>
+
+    <!-- Design: Jan → Mar 2026 -->
+    <tr>
+      <td class="phase">2. Design</td>
+      <td class="empty"></td> <!-- Nov -->
+      <td class="empty"></td> <!-- Dec -->
+      <td class="filled"></td><!-- Jan -->
+      <td class="filled"></td><!-- Feb -->
+      <td class="filled"></td><!-- Mar -->
+      <td class="empty"></td> <!-- Apr -->
+    </tr>
+
+    <!-- Develop: Jan → Mar 2026 -->
+    <tr>
+      <td class="phase">3. Develop</td>
+      <td class="empty"></td> <!-- Nov -->
+      <td class="empty"></td> <!-- Dec -->
+      <td class="filled"></td><!-- Jan -->
+      <td class="filled"></td><!-- Feb -->
+      <td class="filled"></td><!-- Mar -->
+      <td class="empty"></td> <!-- Apr -->
+    </tr>
+
+    <!-- Test: Jan → Mar 2026 -->
+    <tr>
+      <td class="phase">4. Test</td>
+      <td class="empty"></td> <!-- Nov -->
+      <td class="empty"></td> <!-- Dec -->
+      <td class="filled"></td><!-- Jan -->
+      <td class="filled"></td><!-- Feb -->
+      <td class="filled"></td><!-- Mar -->
+      <td class="empty"></td> <!-- Apr -->
+    </tr>
+
+    <!-- Release: Mar → Apr 2026 -->
+    <tr>
+      <td class="phase">5. Release</td>
+      <td class="empty"></td> <!-- Nov -->
+      <td class="empty"></td> <!-- Dec -->
+      <td class="empty"></td> <!-- Jan -->
+      <td class="empty"></td> <!-- Feb -->
+      <td class="filled"></td><!-- Mar -->
+      <td class="filled"></td><!-- Apr -->
+    </tr>
+
+    <!-- Feedback: Mar → Apr 2026 -->
+    <tr>
+      <td class="phase">6. Feedback</td>
+      <td class="empty"></td> <!-- Nov -->
+      <td class="empty"></td> <!-- Dec -->
+      <td class="empty"></td> <!-- Jan -->
+      <td class="empty"></td> <!-- Feb -->
+      <td class="filled"></td><!-- Mar -->
+      <td class="filled"></td><!-- Apr -->
+    </tr>
+  </tbody>
+</table>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-box fin"></div>
+    <span>Finished / Active</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-box unfin"></div>
+    <span>Not Active</span>
+  </div>
+</div>
+
+<p class="note">Right-click → Print → Save as PDF &nbsp;|&nbsp; Or screenshot for document use</p>
+
+</body>
+</html>

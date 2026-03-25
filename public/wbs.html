@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WBS — OJT Monitoring System</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; }
+  h2 { text-align: center; font-size: 15px; margin-bottom: 20px; color: #111; }
+  .note { text-align: center; font-size: 12px; color: #888; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h2>Fig. 3.5: Work Breakdown Structure</h2>
+
+<svg width="1600" height="760" viewBox="0 0 1600 760" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- ══════════════════════════════
+       ROOT BOX  (cx=800)
+  ══════════════════════════════ -->
+  <rect x="510" y="15" width="580" height="72" rx="8"
+        fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.8"/>
+  <text x="800" y="37"  text-anchor="middle" font-size="13" font-weight="bold" fill="#000">AI-Assisted OJT Monitoring System</text>
+  <text x="800" y="54"  text-anchor="middle" font-size="13" font-weight="bold" fill="#000">with LLM-Powered Chatbot and Decision Support</text>
+  <text x="800" y="71"  text-anchor="middle" font-size="13" font-weight="bold" fill="#000">for Internship Management</text>
+
+  <!-- ══════════════════════════════
+       ROOT → PHASE CONNECTORS
+       Phase centers: 132, 399, 666, 933, 1200, 1467
+  ══════════════════════════════ -->
+  <line x1="800"  y1="87"  x2="800"  y2="112" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="132"  y1="112" x2="1467" y2="112" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="132"  y1="112" x2="132"  y2="130" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="399"  y1="112" x2="399"  y2="130" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="666"  y1="112" x2="666"  y2="130" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="933"  y1="112" x2="933"  y2="130" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="1200" y1="112" x2="1200" y2="130" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="1467" y1="112" x2="1467" y2="130" stroke="#4a7fa8" stroke-width="1.5"/>
+
+  <!-- ══════════════════════════════
+       PHASE BOXES  (y=130, h=55, w=205)
+       Phase 1 left=30   cx=132
+       Phase 2 left=297  cx=399
+       Phase 3 left=564  cx=666
+       Phase 4 left=831  cx=933
+       Phase 5 left=1098 cx=1200
+       Phase 6 left=1365 cx=1467
+  ══════════════════════════════ -->
+
+  <!-- 1. Plan -->
+  <rect x="30"   y="130" width="205" height="55" rx="6" fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="30"  y1="154" x2="235"  y2="154" stroke="#4a7fa8" stroke-width="1"/>
+  <text x="132"  y="147" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">1.</text>
+  <text x="132"  y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">Plan</text>
+
+  <!-- 2. Design -->
+  <rect x="297"  y="130" width="205" height="55" rx="6" fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="297" y1="154" x2="502"  y2="154" stroke="#4a7fa8" stroke-width="1"/>
+  <text x="399"  y="147" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">2.</text>
+  <text x="399"  y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">Design</text>
+
+  <!-- 3. Develop -->
+  <rect x="564"  y="130" width="205" height="55" rx="6" fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="564" y1="154" x2="769"  y2="154" stroke="#4a7fa8" stroke-width="1"/>
+  <text x="666"  y="147" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">3.</text>
+  <text x="666"  y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">Develop</text>
+
+  <!-- 4. Test -->
+  <rect x="831"  y="130" width="205" height="55" rx="6" fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="831" y1="154" x2="1036" y2="154" stroke="#4a7fa8" stroke-width="1"/>
+  <text x="933"  y="147" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">4.</text>
+  <text x="933"  y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">Test</text>
+
+  <!-- 5. Release -->
+  <rect x="1098" y="130" width="205" height="55" rx="6" fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="1098" y1="154" x2="1303" y2="154" stroke="#4a7fa8" stroke-width="1"/>
+  <text x="1200" y="147" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">5.</text>
+  <text x="1200" y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">Release</text>
+
+  <!-- 6. Feedback -->
+  <rect x="1365" y="130" width="205" height="55" rx="6" fill="#dce9f5" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="1365" y1="154" x2="1570" y2="154" stroke="#4a7fa8" stroke-width="1"/>
+  <text x="1467" y="147" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">6.</text>
+  <text x="1467" y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">Feedback</text>
+
+  <!-- ══════════════════════════════
+       PHASE → SUB-TASK VERTICAL CONNECTORS
+       Sub-tasks start y=238, h=88, step=100
+       Plan    : 5 tasks → line to y=238+4*100+88=726
+       Design  : 2 tasks → line to y=238+1*100+88=426
+       Develop : 2 tasks → line to 426
+       Test    : 2 tasks → line to 426
+       Release : 1 task  → line to y=238+88=326
+       Feedback: 5 tasks → line to 726
+  ══════════════════════════════ -->
+  <line x1="132"  y1="185" x2="132"  y2="726" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="399"  y1="185" x2="399"  y2="426" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="666"  y1="185" x2="666"  y2="426" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="933"  y1="185" x2="933"  y2="426" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="1200" y1="185" x2="1200" y2="326" stroke="#4a7fa8" stroke-width="1.5"/>
+  <line x1="1467" y1="185" x2="1467" y2="726" stroke="#4a7fa8" stroke-width="1.5"/>
+
+  <!-- ══════════════════════════════
+       PLAN SUB-TASKS  (x=30, cx=132)
+       Sub-task y positions: 238, 338, 438, 538, 638
+  ══════════════════════════════ -->
+
+  <!-- 1.1 System Title -->
+  <rect x="30" y="238" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="132" y="253" text-anchor="middle" font-size="10" font-weight="bold">1.1 System Title</text>
+  <text x="132" y="267" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="132" y="279" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="132" y="291" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="132" y="303" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="132" y="315" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 1.2 Features and Functionality -->
+  <rect x="30" y="338" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="132" y="352" text-anchor="middle" font-size="10" font-weight="bold">1.2 Features and</text>
+  <text x="132" y="363" text-anchor="middle" font-size="10" font-weight="bold">Functionality</text>
+  <text x="132" y="377" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="132" y="389" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="132" y="401" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="132" y="413" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="132" y="415" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- fix overlap — re-space 1.2 names -->
+  <!-- Redo 1.2 properly: box y=338, title lines at 352 and 363, then 5 names with 11px spacing starting at 377 -->
+
+  <!-- 1.3 Interview with Beneficiary -->
+  <rect x="30" y="438" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="132" y="452" text-anchor="middle" font-size="10" font-weight="bold">1.3 Interview with</text>
+  <text x="132" y="463" text-anchor="middle" font-size="10" font-weight="bold">Beneficiary</text>
+  <text x="132" y="477" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="132" y="489" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="132" y="501" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="132" y="513" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="132" y="515" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 1.4 Chapter 1 -->
+  <rect x="30" y="538" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="132" y="554" text-anchor="middle" font-size="10" font-weight="bold">1.4 Chapter 1</text>
+  <text x="132" y="570" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="132" y="582" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="132" y="594" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="132" y="606" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="132" y="618" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 1.5 Chapter 2 -->
+  <rect x="30" y="638" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="132" y="654" text-anchor="middle" font-size="10" font-weight="bold">1.5 Chapter 2</text>
+  <text x="132" y="670" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="132" y="682" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="132" y="694" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="132" y="706" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="132" y="718" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- ══════════════════════════════
+       DESIGN SUB-TASKS  (x=297, cx=399)
+  ══════════════════════════════ -->
+
+  <!-- 2.1 Chapter 3 -->
+  <rect x="297" y="238" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="399" y="254" text-anchor="middle" font-size="10" font-weight="bold">2.1 Chapter 3</text>
+  <text x="399" y="270" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="399" y="282" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="399" y="294" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="399" y="306" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="399" y="318" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 2.2 UI Layout and Design -->
+  <rect x="297" y="338" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="399" y="354" text-anchor="middle" font-size="10" font-weight="bold">2.2 UI Layout</text>
+  <text x="399" y="366" text-anchor="middle" font-size="10" font-weight="bold">and Design</text>
+  <text x="399" y="384" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="399" y="399" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="399" y="414" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- ══════════════════════════════
+       DEVELOP SUB-TASKS  (x=564, cx=666)
+  ══════════════════════════════ -->
+
+  <!-- 3.1 Coding -->
+  <rect x="564" y="238" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="666" y="254" text-anchor="middle" font-size="10" font-weight="bold">3.1 Coding</text>
+  <text x="666" y="276" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="666" y="293" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="666" y="310" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 3.2 Debugging -->
+  <rect x="564" y="338" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="666" y="354" text-anchor="middle" font-size="10" font-weight="bold">3.2 Debugging</text>
+  <text x="666" y="376" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="666" y="393" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="666" y="410" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- ══════════════════════════════
+       TEST SUB-TASKS  (x=831, cx=933)
+  ══════════════════════════════ -->
+
+  <!-- 4.1 Testing -->
+  <rect x="831" y="238" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="933" y="254" text-anchor="middle" font-size="10" font-weight="bold">4.1 Testing</text>
+  <text x="933" y="270" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="933" y="282" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="933" y="294" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="933" y="306" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="933" y="318" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 4.2 Error Detection -->
+  <rect x="831" y="338" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="933" y="354" text-anchor="middle" font-size="10" font-weight="bold">4.2 Error Detection</text>
+  <text x="933" y="370" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="933" y="382" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="933" y="394" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="933" y="406" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="933" y="418" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- ══════════════════════════════
+       RELEASE SUB-TASKS  (x=1098, cx=1200)
+  ══════════════════════════════ -->
+
+  <!-- 5.1 Deployment -->
+  <rect x="1098" y="238" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="1200" y="254" text-anchor="middle" font-size="10" font-weight="bold">5.1 Deployment</text>
+  <text x="1200" y="270" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="1200" y="282" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="1200" y="294" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="1200" y="306" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="1200" y="318" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- ══════════════════════════════
+       FEEDBACK SUB-TASKS  (x=1365, cx=1467)
+  ══════════════════════════════ -->
+
+  <!-- 6.1 Meeting with Beneficiary -->
+  <rect x="1365" y="238" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="1467" y="252" text-anchor="middle" font-size="10" font-weight="bold">6.1 Meeting with</text>
+  <text x="1467" y="264" text-anchor="middle" font-size="10" font-weight="bold">Beneficiary</text>
+  <text x="1467" y="278" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="1467" y="290" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="1467" y="302" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="1467" y="314" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="1467" y="316" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 6.2 System Evaluation -->
+  <rect x="1365" y="338" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="1467" y="354" text-anchor="middle" font-size="10" font-weight="bold">6.2 System Evaluation</text>
+  <text x="1467" y="370" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="1467" y="382" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="1467" y="394" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="1467" y="406" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="1467" y="418" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 6.3 Final Documentation -->
+  <rect x="1365" y="438" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="1467" y="454" text-anchor="middle" font-size="10" font-weight="bold">6.3 Final Documentation</text>
+  <text x="1467" y="470" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="1467" y="482" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="1467" y="494" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="1467" y="506" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="1467" y="518" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 6.4 Interpretation of Evaluation Data -->
+  <rect x="1365" y="538" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="1467" y="553" text-anchor="middle" font-size="10" font-weight="bold">6.4 Interpretation of</text>
+  <text x="1467" y="565" text-anchor="middle" font-size="10" font-weight="bold">Evaluation Data</text>
+  <text x="1467" y="579" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="1467" y="591" text-anchor="middle" font-size="9">J.R. Claveria</text>
+  <text x="1467" y="603" text-anchor="middle" font-size="9">D.F. Cura</text>
+  <text x="1467" y="615" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="1467" y="617" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+  <!-- 6.5 System Enhancement -->
+  <rect x="1365" y="638" width="205" height="88" rx="6" fill="#fff" stroke="#4a7fa8" stroke-width="1.2"/>
+  <text x="1467" y="655" text-anchor="middle" font-size="10" font-weight="bold">6.5 System Enhancement</text>
+  <text x="1467" y="678" text-anchor="middle" font-size="9">D.R. Bignayan</text>
+  <text x="1467" y="695" text-anchor="middle" font-size="9">J.L. Tapel</text>
+  <text x="1467" y="712" text-anchor="middle" font-size="9">K.V. Valeroso</text>
+
+</svg>
+
+<p class="note">Right-click → Print → Save as PDF &nbsp;|&nbsp; Or screenshot for document use</p>
+</body>
+</html>

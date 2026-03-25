@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DFD Level 1 — OJT Monitoring System</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f4f4f4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 20px;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+  h1 { font-size: 20px; color: #111; margin-bottom: 4px; }
+  p.sub { font-size: 13px; color: #555; margin-bottom: 20px; }
+  .wrap { background: #fff; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); border-radius: 6px; }
+  .note { margin-top: 14px; font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+<h1>Data Flow Diagram — Level 1</h1>
+<p class="sub">AI-Assisted OJT Monitoring System &nbsp;|&nbsp; 7 Processes &nbsp;·&nbsp; 3 External Entities &nbsp;·&nbsp; 5 Data Stores</p>
+
+<div class="wrap">
+<svg width="1380" height="960" viewBox="0 0 1380 960" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <polygon points="0 0,9 3.5,0 7" fill="#000"/>
+  </marker>
+</defs>
+
+<!-- ══════════════════════════════════════
+     EXTERNAL ENTITIES  (double-border rect)
+══════════════════════════════════════ -->
+
+<!-- STUDENT E1  left -->
+<rect x="28"   y="362" width="124" height="66" fill="#fff" stroke="#000" stroke-width="2"/>
+<rect x="33"   y="367" width="114" height="56" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="90"   y="392" text-anchor="middle" font-size="13" font-weight="bold">STUDENT</text>
+<text x="90"   y="408" text-anchor="middle" font-size="10">External Entity</text>
+<text x="90"   y="421" text-anchor="middle" font-size="10">E1</text>
+
+<!-- FACULTY E2  right -->
+<rect x="1228" y="362" width="124" height="66" fill="#fff" stroke="#000" stroke-width="2"/>
+<rect x="1233" y="367" width="114" height="56" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="1290" y="392" text-anchor="middle" font-size="13" font-weight="bold">FACULTY</text>
+<text x="1290" y="408" text-anchor="middle" font-size="10">External Entity</text>
+<text x="1290" y="421" text-anchor="middle" font-size="10">E2</text>
+
+<!-- ADMIN E3  bottom -->
+<rect x="618"  y="866" width="140" height="66" fill="#fff" stroke="#000" stroke-width="2"/>
+<rect x="623"  y="871" width="130" height="56" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="688"  y="896" text-anchor="middle" font-size="13" font-weight="bold">ADMIN</text>
+<text x="688"  y="912" text-anchor="middle" font-size="10">External Entity</text>
+<text x="688"  y="925" text-anchor="middle" font-size="10">E3</text>
+
+<!-- ══════════════════════════════════════
+     PROCESSES  (Gane & Sarson: rect + top divider)
+     Layout:
+       P1.0 Auth         — top center
+       P2.0 Submissions  — mid left
+       P3.0 Review       — mid right
+       P4.0 DTR Track    — lower left
+       P5.0 Dashboard    — mid center
+       P6.0 Chatbot      — lower center
+       P7.0 DSS          — lower right
+══════════════════════════════════════ -->
+
+<!-- P1.0 User Authentication  (cx=660, cy=72) -->
+<rect x="582" y="38" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="582" y1="62" x2="738" y2="62" stroke="#000" stroke-width="1"/>
+<text x="660" y="55" text-anchor="middle" font-size="10" font-weight="bold">1.0</text>
+<text x="660" y="80" text-anchor="middle" font-size="11">User</text>
+<text x="660" y="95" text-anchor="middle" font-size="11">Authentication</text>
+
+<!-- P2.0 Manage OJT Submissions  (cx=335, cy=392) -->
+<rect x="257" y="360" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="257" y1="384" x2="413" y2="384" stroke="#000" stroke-width="1"/>
+<text x="335" y="377" text-anchor="middle" font-size="10" font-weight="bold">2.0</text>
+<text x="335" y="400" text-anchor="middle" font-size="11">Manage OJT</text>
+<text x="335" y="416" text-anchor="middle" font-size="11">Submissions</text>
+
+<!-- P3.0 Review & Approve  (cx=972, cy=392) -->
+<rect x="894" y="360" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="894" y1="384" x2="1050" y2="384" stroke="#000" stroke-width="1"/>
+<text x="972" y="377" text-anchor="middle" font-size="10" font-weight="bold">3.0</text>
+<text x="972" y="400" text-anchor="middle" font-size="11">Review &amp; Approve</text>
+<text x="972" y="416" text-anchor="middle" font-size="11">Submissions</text>
+
+<!-- P4.0 Track DTR & OJT Hours  (cx=335, cy=590) -->
+<rect x="257" y="558" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="257" y1="582" x2="413" y2="582" stroke="#000" stroke-width="1"/>
+<text x="335" y="575" text-anchor="middle" font-size="10" font-weight="bold">4.0</text>
+<text x="335" y="596" text-anchor="middle" font-size="11">Track DTR &amp;</text>
+<text x="335" y="612" text-anchor="middle" font-size="11">OJT Hours</text>
+
+<!-- P5.0 Generate Reports & Dashboards  (cx=660, cy=392) -->
+<rect x="582" y="360" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="582" y1="384" x2="738" y2="384" stroke="#000" stroke-width="1"/>
+<text x="660" y="377" text-anchor="middle" font-size="10" font-weight="bold">5.0</text>
+<text x="660" y="400" text-anchor="middle" font-size="11">Reports &amp;</text>
+<text x="660" y="416" text-anchor="middle" font-size="11">Dashboards</text>
+
+<!-- P6.0 Process AI Chatbot  (cx=660, cy=660) -->
+<rect x="582" y="630" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="582" y1="654" x2="738" y2="654" stroke="#000" stroke-width="1"/>
+<text x="660" y="647" text-anchor="middle" font-size="10" font-weight="bold">6.0</text>
+<text x="660" y="670" text-anchor="middle" font-size="11">Process AI</text>
+<text x="660" y="686" text-anchor="middle" font-size="11">Chatbot Queries</text>
+
+<!-- P7.0 Decision Support Analytics  (cx=972, cy=590) -->
+<rect x="894" y="558" width="156" height="68" fill="#fff" stroke="#000" stroke-width="1.8"/>
+<line x1="894" y1="582" x2="1050" y2="582" stroke="#000" stroke-width="1"/>
+<text x="972" y="575" text-anchor="middle" font-size="10" font-weight="bold">7.0</text>
+<text x="972" y="596" text-anchor="middle" font-size="11">Decision Support</text>
+<text x="972" y="612" text-anchor="middle" font-size="11">Analytics</text>
+
+<!-- ══════════════════════════════════════
+     DATA STORES  (open rectangle — left bar + top/bottom lines + ID divider)
+══════════════════════════════════════ -->
+
+<!-- D1  User Records  (top right area) -->
+<line x1="846" y1="44"  x2="846"  y2="72"  stroke="#000" stroke-width="2"/>
+<line x1="846" y1="44"  x2="1060" y2="44"  stroke="#000" stroke-width="2"/>
+<line x1="846" y1="72"  x2="1060" y2="72"  stroke="#000" stroke-width="2"/>
+<line x1="882" y1="44"  x2="882"  y2="72"  stroke="#000" stroke-width="1"/>
+<text x="864" y="63" text-anchor="middle" font-size="10" font-weight="bold">D1</text>
+<text x="971" y="63" text-anchor="middle" font-size="11">User Records</text>
+
+<!-- D2  OJT Submission Records  (left mid) -->
+<line x1="38"  y1="487" x2="38"   y2="515" stroke="#000" stroke-width="2"/>
+<line x1="38"  y1="487" x2="252"  y2="487" stroke="#000" stroke-width="2"/>
+<line x1="38"  y1="515" x2="252"  y2="515" stroke="#000" stroke-width="2"/>
+<line x1="74"  y1="487" x2="74"   y2="515" stroke="#000" stroke-width="1"/>
+<text x="56"  y="506" text-anchor="middle" font-size="10" font-weight="bold">D2</text>
+<text x="163" y="506" text-anchor="middle" font-size="11">OJT Submission Records</text>
+
+<!-- D3  DTR Records  (left lower) -->
+<line x1="38"  y1="692" x2="38"   y2="720" stroke="#000" stroke-width="2"/>
+<line x1="38"  y1="692" x2="228"  y2="692" stroke="#000" stroke-width="2"/>
+<line x1="38"  y1="720" x2="228"  y2="720" stroke="#000" stroke-width="2"/>
+<line x1="74"  y1="692" x2="74"   y2="720" stroke="#000" stroke-width="1"/>
+<text x="56"  y="711" text-anchor="middle" font-size="10" font-weight="bold">D3</text>
+<text x="133" y="711" text-anchor="middle" font-size="11">DTR Records</text>
+
+<!-- D4  Announcements & FAQs  (right mid) -->
+<line x1="1110" y1="487" x2="1110" y2="515" stroke="#000" stroke-width="2"/>
+<line x1="1110" y1="487" x2="1340" y2="487" stroke="#000" stroke-width="2"/>
+<line x1="1110" y1="515" x2="1340" y2="515" stroke="#000" stroke-width="2"/>
+<line x1="1146" y1="487" x2="1146" y2="515" stroke="#000" stroke-width="1"/>
+<text x="1128" y="506" text-anchor="middle" font-size="10" font-weight="bold">D4</text>
+<text x="1225" y="506" text-anchor="middle" font-size="11">Announcements &amp; FAQs</text>
+
+<!-- D5  System Configuration  (bottom right) -->
+<line x1="858"  y1="776" x2="858"  y2="804" stroke="#000" stroke-width="2"/>
+<line x1="858"  y1="776" x2="1080" y2="776" stroke="#000" stroke-width="2"/>
+<line x1="858"  y1="804" x2="1080" y2="804" stroke="#000" stroke-width="2"/>
+<line x1="894"  y1="776" x2="894"  y2="804" stroke="#000" stroke-width="1"/>
+<text x="876"  y="795" text-anchor="middle" font-size="10" font-weight="bold">D5</text>
+<text x="969"  y="795" text-anchor="middle" font-size="11">System Configuration</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — STUDENT ↔ SYSTEM
+══════════════════════════════════════ -->
+
+<!-- Student → P1.0: Login Credentials (up-right orthogonal) -->
+<path d="M152 374 H220 V72 H582" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="220" y="58" width="120" height="16" fill="#fff"/>
+<text x="280" y="70" text-anchor="middle" font-size="10">Login Credentials</text>
+
+<!-- Student → P2.0: Submit OJT Documents / DTR -->
+<path d="M152 390 H257" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="162" y="372" width="80" height="16" fill="#fff"/>
+<text x="202" y="384" text-anchor="middle" font-size="10">Submit Docs / DTR</text>
+
+<!-- P2.0 → Student: Approval / Decline Notification -->
+<path d="M257 412 H152" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="160" y="412" width="88" height="16" fill="#fff"/>
+<text x="204" y="424" text-anchor="middle" font-size="10">Approval / Decline</text>
+
+<!-- Student → P6.0: Chatbot Query -->
+<path d="M90 428 V664 H582" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="96" y="536" width="80" height="16" fill="#fff"/>
+<text x="136" y="548" text-anchor="middle" font-size="10">Chatbot Query</text>
+
+<!-- P6.0 → Student: AI Chatbot Response (dashed) -->
+<path d="M582 676 H68 V428" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+<rect x="96" y="558" width="78" height="16" fill="#fff"/>
+<text x="135" y="570" text-anchor="middle" font-size="10">AI Response</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — FACULTY ↔ SYSTEM
+══════════════════════════════════════ -->
+
+<!-- Faculty → P1.0: Login Credentials -->
+<path d="M1228 374 H1160 V72 H738" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="960" y="58" width="120" height="16" fill="#fff"/>
+<text x="1020" y="70" text-anchor="middle" font-size="10">Login Credentials</text>
+
+<!-- Faculty → P3.0: Review Decisions / Remarks -->
+<path d="M1228 390 H1050" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="1062" y="374" width="118" height="16" fill="#fff"/>
+<text x="1121" y="386" text-anchor="middle" font-size="10">Review Decisions / Remarks</text>
+
+<!-- Faculty → P3.0: FAQ & Announcement Input -->
+<path d="M1228 408 H1050" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="1062" y="408" width="118" height="16" fill="#fff"/>
+<text x="1121" y="420" text-anchor="middle" font-size="10">FAQ / Announcement Input</text>
+
+<!-- Faculty ← P5.0: Dashboard Analytics (dashed) -->
+<path d="M738 374 H900 V330 H1290 V362" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+<rect x="990" y="318" width="130" height="16" fill="#fff"/>
+<text x="1055" y="330" text-anchor="middle" font-size="10">View Dashboard Analytics</text>
+
+<!-- Faculty ← P7.0: Decision Support Report (dashed) -->
+<path d="M1050 590 H1310 V428" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+<rect x="1128" y="574" width="130" height="16" fill="#fff"/>
+<text x="1193" y="586" text-anchor="middle" font-size="10">Decision Support Report</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — ADMIN ↔ SYSTEM
+══════════════════════════════════════ -->
+
+<!-- Admin → P1.0: Login Credentials + User/Section Management -->
+<path d="M618 882 H200 V72 H582" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="148" y="200" width="126" height="28" fill="#fff"/>
+<text x="211" y="212" text-anchor="middle" font-size="10">Login Credentials /</text>
+<text x="211" y="224" text-anchor="middle" font-size="10">User &amp; Section Mgmt</text>
+
+<!-- Admin → D5: System Config / OpenAI API Key -->
+<path d="M758 882 H960 V804" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="832" y="834" width="130" height="28" fill="#fff"/>
+<text x="897" y="846" text-anchor="middle" font-size="10">System Config /</text>
+<text x="897" y="858" text-anchor="middle" font-size="10">OpenAI API Key</text>
+
+<!-- Admin ← P5.0: System Reports / Audit Logs (dashed) -->
+<path d="M686 428 V866" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+<rect x="692" y="636" width="110" height="28" fill="#fff"/>
+<text x="747" y="648" text-anchor="middle" font-size="10">System Reports /</text>
+<text x="747" y="660" text-anchor="middle" font-size="10">Audit Logs</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — P1.0 ↔ D1 (User Records)
+══════════════════════════════════════ -->
+
+<!-- P1.0 → D1: Store User Record -->
+<path d="M738 60 H846" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="752" y="46" width="88" height="14" fill="#fff"/>
+<text x="796" y="58" text-anchor="middle" font-size="10">Store User Record</text>
+
+<!-- D1 → P1.0: Retrieve User Data -->
+<path d="M846 72 H738" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="752" y="72" width="88" height="14" fill="#fff"/>
+<text x="796" y="84" text-anchor="middle" font-size="10">Retrieve User Data</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — P1.0 → P2.0 / P3.0  (authenticated sessions)
+══════════════════════════════════════ -->
+
+<!-- P1.0 → P2.0: Authenticated Student Session -->
+<path d="M634 106 V332 H335 V360" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="345" y="319" width="140" height="16" fill="#fff"/>
+<text x="415" y="331" text-anchor="middle" font-size="10">Auth. Student Session</text>
+
+<!-- P1.0 → P3.0: Authenticated Faculty Session -->
+<path d="M686 106 V344 H972 V360" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="800" y="331" width="140" height="16" fill="#fff"/>
+<text x="870" y="343" text-anchor="middle" font-size="10">Auth. Faculty Session</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — P2.0 ↔ D2 (Submissions)
+══════════════════════════════════════ -->
+
+<!-- P2.0 → D2: Save Submission -->
+<path d="M335 428 V487" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="342" y="449" width="88" height="14" fill="#fff"/>
+<text x="386" y="461" text-anchor="middle" font-size="10">Save Submission</text>
+
+<!-- D2 → P3.0: Retrieve Submissions for Review -->
+<path d="M252 501 H972 V428" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="540" y="487" width="160" height="16" fill="#fff"/>
+<text x="620" y="499" text-anchor="middle" font-size="10">Retrieve Submissions for Review</text>
+
+<!-- P3.0 → D2: Update Submission Status (dashed) -->
+<path d="M972 428 V515 H252" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+<rect x="540" y="515" width="130" height="16" fill="#fff"/>
+<text x="605" y="527" text-anchor="middle" font-size="10">Update Submission Status</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — P2.0 → P4.0 → D3
+══════════════════════════════════════ -->
+
+<!-- P2.0 → P4.0: DTR Data for Tracking -->
+<path d="M335 428 V558" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="342" y="484" width="88" height="16" fill="#fff"/>
+<text x="386" y="492" text-anchor="middle" font-size="10">DTR Data</text>
+<!-- NOTE: this shares x=335 with P2.0→D2. Offset x slightly: -->
+<!-- Already using same x, just different y targets. The two arrows from P2.0 bottom share the same start but go to D2 (y=487) and P4.0 (y=558). They overlap between y=428 and y=487. Reuse same visual line - acceptable in DFD. -->
+
+<!-- P4.0 → D3: Save DTR Entry -->
+<path d="M335 626 V692 H228" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="238" y="650" width="88" height="16" fill="#fff"/>
+<text x="282" y="662" text-anchor="middle" font-size="10">Save DTR Entry</text>
+
+<!-- D3 → P4.0: Read DTR Records -->
+<path d="M228 706 H240 V590 H257" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="140" y="694" width="88" height="16" fill="#fff"/>
+<text x="184" y="706" text-anchor="middle" font-size="10">Read DTR Records</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — P3.0 ↔ D4 (Announcements)
+══════════════════════════════════════ -->
+
+<!-- P3.0 → D4: Store Announcement / FAQ -->
+<path d="M1050 400 H1200 V487" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="1102" y="434" width="132" height="16" fill="#fff"/>
+<text x="1168" y="446" text-anchor="middle" font-size="10">Store FAQ / Announcement</text>
+
+<!-- D4 → P5.0: Retrieve Announcements -->
+<path d="M1110 501 H756 V428" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="870" y="487" width="130" height="16" fill="#fff"/>
+<text x="935" y="499" text-anchor="middle" font-size="10">Retrieve Announcements</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — INTO P5.0 (Dashboards)
+══════════════════════════════════════ -->
+
+<!-- P2.0 → P5.0: Submission Summary Data -->
+<path d="M413 392 H582" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="424" y="376" width="112" height="16" fill="#fff"/>
+<text x="480" y="388" text-anchor="middle" font-size="10">Submission Summary</text>
+
+<!-- P3.0 → P5.0: Review Summary Data -->
+<path d="M894 392 H738" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="756" y="376" width="112" height="16" fill="#fff"/>
+<text x="812" y="388" text-anchor="middle" font-size="10">Review Summary</text>
+
+<!-- P4.0 → P5.0: DTR Hour Totals -->
+<path d="M413 584 H560 V428" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="465" y="548" width="88" height="16" fill="#fff"/>
+<text x="509" y="560" text-anchor="middle" font-size="10">DTR Hour Totals</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — INTO P7.0 (Decision Support)
+══════════════════════════════════════ -->
+
+<!-- P3.0 → P7.0: Submission Status Data -->
+<path d="M972 428 V558" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="980" y="488" width="112" height="16" fill="#fff"/>
+<text x="1036" y="500" text-anchor="middle" font-size="10">Submission Status Data</text>
+
+<!-- P4.0 → P7.0: Hours Progress Data -->
+<path d="M413 604 V644 H894" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="574" y="628" width="130" height="16" fill="#fff"/>
+<text x="639" y="640" text-anchor="middle" font-size="10">Hours Progress Data</text>
+
+<!-- P5.0 → P7.0: Dashboard Analytics Feed -->
+<path d="M738 410 H870 V558" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="776" y="437" width="88" height="16" fill="#fff"/>
+<text x="820" y="449" text-anchor="middle" font-size="10">Analytics Feed</text>
+
+<!-- ══════════════════════════════════════
+     DATA FLOWS — P6.0 Chatbot inputs
+══════════════════════════════════════ -->
+
+<!-- D2 → P6.0: Student Context Data for Chatbot (dashed) -->
+<path d="M252 509 H460 V664 H582" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+<rect x="264" y="493" width="120" height="16" fill="#fff"/>
+<text x="324" y="505" text-anchor="middle" font-size="10">Student Context Data</text>
+
+<!-- D5 → P6.0: OpenAI API Key / Config -->
+<path d="M858 790 H660 V698" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<rect x="710" y="776" width="130" height="16" fill="#fff"/>
+<text x="775" y="788" text-anchor="middle" font-size="10">OpenAI API Key / Config</text>
+
+<!-- ══════════════════════════════════════
+     LEGEND  (bottom left)
+══════════════════════════════════════ -->
+<rect x="28" y="880" width="340" height="62" rx="4" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="44" y="899" font-size="11" font-weight="bold">Legend</text>
+
+<!-- Entity sample -->
+<rect x="44" y="906" width="28" height="16" fill="#fff" stroke="#000" stroke-width="1.5"/>
+<text x="80" y="919" font-size="10">External Entity</text>
+
+<!-- Process sample -->
+<rect x="155" y="906" width="28" height="16" fill="#fff" stroke="#000" stroke-width="1.5"/>
+<line x1="155" y1="912" x2="183" y2="912" stroke="#000" stroke-width="0.8"/>
+<text x="191" y="919" font-size="10">Process</text>
+
+<!-- Data Store sample -->
+<line x1="44"  y1="932" x2="44"  y2="948" stroke="#000" stroke-width="1.5"/>
+<line x1="44"  y1="932" x2="76"  y2="932" stroke="#000" stroke-width="1.5"/>
+<line x1="44"  y1="948" x2="76"  y2="948" stroke="#000" stroke-width="1.5"/>
+<line x1="54"  y1="932" x2="54"  y2="948" stroke="#000" stroke-width="0.8"/>
+<text x="84" y="944" font-size="10">Data Store</text>
+
+<!-- Arrow samples -->
+<line x1="180" y1="932" x2="210" y2="932" stroke="#000" stroke-width="1.3" marker-end="url(#arr)"/>
+<text x="218" y="936" font-size="10">Primary Flow</text>
+<line x1="180" y1="948" x2="210" y2="948" stroke="#000" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+<text x="218" y="952" font-size="10">Secondary Flow</text>
+
+<!-- ══════════════════════════════════════
+     TITLE BOX  (bottom right)
+══════════════════════════════════════ -->
+<rect x="1040" y="870" width="312" height="72" rx="4" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="1196" y="891" text-anchor="middle" font-size="13" font-weight="bold">Data Flow Diagram — Level 1</text>
+<text x="1196" y="908" text-anchor="middle" font-size="11">AI-Assisted OJT Monitoring System</text>
+<text x="1196" y="924" text-anchor="middle" font-size="10">Processes: 7  |  Entities: 3  |  Data Stores: 5</text>
+
+</svg>
+</div>
+
+<p class="note">Right-click → Print → Save as PDF to export &nbsp;|&nbsp; Or screenshot for document use</p>
+</body>
+</html>

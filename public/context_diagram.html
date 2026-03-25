@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Context Diagram — OJT Monitoring System</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f0f4f8; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 30px 20px; font-family: 'Segoe UI', Arial, sans-serif; }
+  h1 { font-size: 20px; color: #1a1a2e; margin-bottom: 6px; letter-spacing: 0.5px; }
+  p.sub { font-size: 13px; color: #666; margin-bottom: 24px; }
+  svg { background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); }
+</style>
+</head>
+<body>
+<h1>Context Diagram — OJT Monitoring System (OJTMS)</h1>
+<p class="sub">Level 0 Data Flow Diagram &nbsp;|&nbsp; 1 Process &nbsp;·&nbsp; 3 External Entities</p>
+
+<svg width="900" height="680" viewBox="0 0 900 680" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arrow markers -->
+    <marker id="arrowOut" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowIn" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <marker id="arrowOutR" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowInR" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <!-- Drop shadow filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="rgba(0,0,0,0.15)"/>
+    </filter>
+  </defs>
+
+  <!-- ══════════════ CENTRAL PROCESS ══════════════ -->
+  <ellipse cx="450" cy="340" rx="130" ry="90" fill="#1e3a8a" filter="url(#shadow)"/>
+  <ellipse cx="450" cy="340" rx="126" ry="86" fill="#1d4ed8"/>
+  <text x="450" y="325" text-anchor="middle" fill="white" font-size="14" font-weight="bold">OJT Monitoring</text>
+  <text x="450" y="345" text-anchor="middle" fill="white" font-size="14" font-weight="bold">System</text>
+  <text x="450" y="363" text-anchor="middle" fill="#93c5fd" font-size="11">(OJTMS)</text>
+
+  <!-- ══════════════ ENTITY: STUDENT (Left) ══════════════ -->
+  <rect x="30" y="295" width="140" height="90" rx="6" ry="6" fill="#065f46" filter="url(#shadow)"/>
+  <rect x="33" y="298" width="134" height="84" rx="4" ry="4" fill="#047857"/>
+  <text x="100" y="333" text-anchor="middle" fill="white" font-size="13" font-weight="bold">STUDENT</text>
+  <text x="100" y="352" text-anchor="middle" fill="#a7f3d0" font-size="10">External Entity</text>
+  <text x="100" y="368" text-anchor="middle" fill="#a7f3d0" font-size="10">E1</text>
+
+  <!-- Student → System (data flows going right, upper) -->
+  <!-- Arrow line -->
+  <path d="M170 325 L318 310" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrowOut)"/>
+  <rect x="178" y="295" width="130" height="28" rx="4" fill="#dbeafe" opacity="0.95"/>
+  <text x="243" y="307" text-anchor="middle" fill="#1e40af" font-size="9.5" font-weight="600">Login Credentials</text>
+  <text x="243" y="319" text-anchor="middle" fill="#1e40af" font-size="9">DTR / Weekly / Monthly Reports</text>
+
+  <path d="M170 335 L318 340" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrowOut)" stroke-dasharray="5,3"/>
+  <rect x="178" y="337" width="130" height="27" rx="4" fill="#dbeafe" opacity="0.95"/>
+  <text x="243" y="348" text-anchor="middle" fill="#1e40af" font-size="9.5" font-weight="600">Supervisor Eval / COC</text>
+  <text x="243" y="360" text-anchor="middle" fill="#1e40af" font-size="9">Incident Report / Checklist Docs</text>
+
+  <!-- System → Student (data flows going left, lower) -->
+  <path d="M320 370 L170 360" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrowIn)"/>
+  <rect x="176" y="367" width="130" height="27" rx="4" fill="#dcfce7" opacity="0.95"/>
+  <text x="241" y="378" text-anchor="middle" fill="#14532d" font-size="9.5" font-weight="600">Approval / Decline Status</text>
+  <text x="241" y="390" text-anchor="middle" fill="#14532d" font-size="9">Faculty Remarks / Feedback</text>
+
+  <path d="M320 385 L170 385" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrowIn)" stroke-dasharray="5,3"/>
+  <rect x="176" y="392" width="130" height="27" rx="4" fill="#dcfce7" opacity="0.95"/>
+  <text x="241" y="403" text-anchor="middle" fill="#14532d" font-size="9.5" font-weight="600">Announcements / FAQs</text>
+  <text x="241" y="415" text-anchor="middle" fill="#14532d" font-size="9">Dashboard Data / AI Responses</text>
+
+  <!-- ══════════════ ENTITY: FACULTY (Right) ══════════════ -->
+  <rect x="730" y="295" width="140" height="90" rx="6" ry="6" fill="#4c1d95" filter="url(#shadow)"/>
+  <rect x="733" y="298" width="134" height="84" rx="4" ry="4" fill="#6d28d9"/>
+  <text x="800" y="333" text-anchor="middle" fill="white" font-size="13" font-weight="bold">FACULTY</text>
+  <text x="800" y="352" text-anchor="middle" fill="#ddd6fe" font-size="10">External Entity</text>
+  <text x="800" y="368" text-anchor="middle" fill="#ddd6fe" font-size="10">E2</text>
+
+  <!-- Faculty → System (left, upper) -->
+  <path d="M730 320 L582 308" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrowOut)"/>
+  <rect x="592" y="292" width="130" height="28" rx="4" fill="#ede9fe" opacity="0.95"/>
+  <text x="657" y="304" text-anchor="middle" fill="#3730a3" font-size="9.5" font-weight="600">Login Credentials</text>
+  <text x="657" y="316" text-anchor="middle" fill="#3730a3" font-size="9">Review Decisions (Approve/Decline)</text>
+
+  <path d="M730 335 L582 342" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrowOut)" stroke-dasharray="5,3"/>
+  <rect x="592" y="339" width="130" height="27" rx="4" fill="#ede9fe" opacity="0.95"/>
+  <text x="657" y="350" text-anchor="middle" fill="#3730a3" font-size="9.5" font-weight="600">FAQ Content / Announcements</text>
+  <text x="657" y="362" text-anchor="middle" fill="#3730a3" font-size="9">Incident Response / Remarks</text>
+
+  <!-- System → Faculty (right, lower) -->
+  <path d="M582 370 L730 358" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrowIn)"/>
+  <rect x="592" y="367" width="130" height="27" rx="4" fill="#f0fdf4" opacity="0.95"/>
+  <text x="657" y="378" text-anchor="middle" fill="#14532d" font-size="9.5" font-weight="600">Student Submissions</text>
+  <text x="657" y="390" text-anchor="middle" fill="#14532d" font-size="9">Progress Reports / Pending Reviews</text>
+
+  <path d="M582 385 L730 378" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrowIn)" stroke-dasharray="5,3"/>
+  <rect x="592" y="393" width="130" height="27" rx="4" fill="#f0fdf4" opacity="0.95"/>
+  <text x="657" y="404" text-anchor="middle" fill="#14532d" font-size="9.5" font-weight="600">Dashboard Analytics</text>
+  <text x="657" y="416" text-anchor="middle" fill="#14532d" font-size="9">AI Chatbot / Decision Support</text>
+
+  <!-- ══════════════ ENTITY: ADMIN (Bottom) ══════════════ -->
+  <rect x="380" y="540" width="140" height="90" rx="6" ry="6" fill="#7f1d1d" filter="url(#shadow)"/>
+  <rect x="383" y="543" width="134" height="84" rx="4" ry="4" fill="#b91c1c"/>
+  <text x="450" y="578" text-anchor="middle" fill="white" font-size="13" font-weight="bold">ADMIN</text>
+  <text x="450" y="597" text-anchor="middle" fill="#fecaca" font-size="10">External Entity</text>
+  <text x="450" y="613" text-anchor="middle" fill="#fecaca" font-size="10">E3</text>
+
+  <!-- Admin → System (upper, left) -->
+  <path d="M416 540 L432 432" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrowOut)"/>
+  <rect x="360" y="465" width="130" height="27" rx="4" fill="#fee2e2" opacity="0.95"/>
+  <text x="425" y="476" text-anchor="middle" fill="#7f1d1d" font-size="9.5" font-weight="600">User / Section Management</text>
+  <text x="425" y="488" text-anchor="middle" fill="#7f1d1d" font-size="9">Login Credentials</text>
+
+  <!-- Admin → System (upper, right) -->
+  <path d="M484 540 L468 432" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrowOut)" stroke-dasharray="5,3"/>
+  <rect x="414" y="500" width="130" height="27" rx="4" fill="#fee2e2" opacity="0.95"/>
+  <text x="479" y="511" text-anchor="middle" fill="#7f1d1d" font-size="9.5" font-weight="600">CMS / OpenAI Settings</text>
+  <text x="479" y="523" text-anchor="middle" fill="#7f1d1d" font-size="9">System Configuration</text>
+
+  <!-- System → Admin (lower, left) -->
+  <path d="M425 430 L410 540" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrowIn)"/>
+  <rect x="266" y="476" width="130" height="27" rx="4" fill="#f0fdf4" opacity="0.95"/>
+  <text x="331" y="487" text-anchor="middle" fill="#14532d" font-size="9.5" font-weight="600">System Reports</text>
+  <text x="331" y="499" text-anchor="middle" fill="#14532d" font-size="9">User & Section Data</text>
+
+  <!-- System → Admin (lower, right) -->
+  <path d="M475 430 L490 540" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrowIn)" stroke-dasharray="5,3"/>
+  <rect x="506" y="476" width="130" height="27" rx="4" fill="#f0fdf4" opacity="0.95"/>
+  <text x="571" y="487" text-anchor="middle" fill="#14532d" font-size="9.5" font-weight="600">Audit Logs / CMS Data</text>
+  <text x="571" y="499" text-anchor="middle" fill="#14532d" font-size="9">Database Export</text>
+
+  <!-- ══════════════ LEGEND ══════════════ -->
+  <rect x="30" y="590" width="270" height="75" rx="6" fill="white" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="610" fill="#374151" font-size="11" font-weight="bold">Legend</text>
+  <!-- Entity box sample -->
+  <rect x="44" y="618" width="22" height="12" rx="2" fill="#047857"/>
+  <text x="72" y="628" fill="#374151" font-size="10">External Entity (Terminator)</text>
+  <!-- Process ellipse sample -->
+  <ellipse cx="55" cy="648" rx="13" ry="8" fill="#1d4ed8"/>
+  <text x="72" y="652" fill="#374151" font-size="10">Process</text>
+  <!-- Data flow arrows -->
+  <line x1="155" y1="621" x2="180" y2="621" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowOut)"/>
+  <text x="186" y="625" fill="#374151" font-size="10">Data flow to system</text>
+  <line x1="155" y1="640" x2="180" y2="640" stroke="#16a34a" stroke-width="2" marker-end="url(#arrowIn)"/>
+  <text x="186" y="644" fill="#374151" font-size="10">Data flow from system</text>
+  <line x1="155" y1="657" x2="180" y2="657" stroke="#2563eb" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrowOut)"/>
+  <text x="186" y="661" fill="#374151" font-size="10">Secondary data flow</text>
+
+  <!-- Title box -->
+  <rect x="614" y="580" width="256" height="75" rx="6" fill="#1e3a8a" opacity="0.07" stroke="#1e3a8a" stroke-width="1"/>
+  <text x="742" y="602" text-anchor="middle" fill="#1e3a8a" font-size="12" font-weight="bold">Context Diagram</text>
+  <text x="742" y="620" text-anchor="middle" fill="#374151" font-size="10">OJT Monitoring System v2</text>
+  <text x="742" y="636" text-anchor="middle" fill="#374151" font-size="10">Process: 1 | Entities: 3</text>
+  <text x="742" y="652" text-anchor="middle" fill="#374151" font-size="10">Level 0 — Data Flow Diagram</text>
+</svg>
+
+<div style="margin-top:18px;font-size:12px;color:#888;">Right-click the diagram → Print / Save as PDF to export &nbsp;|&nbsp; Or take a screenshot</div>
+</body>
+</html>
