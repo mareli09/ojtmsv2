@@ -119,7 +119,7 @@
                                     <label for="contact_email" class="form-label">Email Address <span class="text-danger">*</span></label>
                                     <input type="email" class="form-control @error('contact_email') is-invalid @enderror" 
                                         id="contact_email" name="contact_email" 
-                                        value="{{ $cms->get('contact_email')->value ?? 'ojtms@example.edu.ph' }}" 
+                                        value="{{ $cms->get('contact_email')->value ?? 'admin@ojtms.online' }}" 
                                         required>
                                     @error('contact_email')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                                 </div>

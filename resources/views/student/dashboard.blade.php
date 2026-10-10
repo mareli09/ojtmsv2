@@ -6,6 +6,13 @@
 <div class="container-fluid">
     <h2><i class="fas fa-tachometer-alt"></i> Student Dashboard</h2>
 
+    @if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+
     {{-- Welcome Card --}}
     <div class="card mb-4" style="border-top: 5px solid var(--ojtms-accent);">
         <div class="card-body">
@@ -16,9 +23,9 @@
         </div>
     </div>
 
-    {{-- Student ID & Department --}}
+    {{-- Student ID, Department & Company --}}
     <div class="row mb-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card">
                 <div class="card-body text-center py-3">
                     <h6 class="text-muted mb-1">Student ID</h6>
@@ -26,11 +33,25 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card">
                 <div class="card-body text-center py-3">
                     <h6 class="text-muted mb-1">Department</h6>
                     <h4 class="mb-0 fw-bold">{{ $user->department ?? 'N/A' }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center py-3">
+                    <h6 class="text-muted mb-1">Internship Company</h6>
+                    @if($user->company_name)
+                        <h4 class="mb-0 fw-bold">{{ $user->company_name }}</h4>
+                        @if($user->company_address)<small class="text-muted">{{ $user->company_address }}</small>@endif
+                    @else
+                        <h4 class="mb-0 fw-bold text-muted">No company yet</h4>
+                        <a href="/student/profile" class="small">Declare your company</a>
+                    @endif
                 </div>
             </div>
         </div>

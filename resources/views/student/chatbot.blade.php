@@ -78,7 +78,7 @@ const chatMessages = document.getElementById('chatMessages');
 const chatForm     = document.getElementById('chatForm');
 const chatInput    = document.getElementById('chatInput');
 const aiEnabled    = {{ $aiEnabled ? 'true' : 'false' }};
-let history = [];
+const csrfToken    = '{{ csrf_token() }}';
 
 // Keyword fallback for basic mode
 const faqs = {
@@ -151,35 +151,50 @@ function getKeywordReply(input) {
     return "I'm not sure about that. You can check the <strong>FAQ</strong> section or contact your faculty directly. Try rephrasing your question!";
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Restore the saved conversation
+@json($chatHistory->map->only(['role', 'content'])).forEach(m => {
+    addMessage(m.role === 'user' ? escapeHtml(m.content) : formatMarkdown(m.content), m.role === 'user');
+});
+
 chatForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     const msg = chatInput.value.trim();
     if (!msg) return;
 
-    addMessage(msg, true);
+    addMessage(escapeHtml(msg), true);
     chatInput.value = '';
 
     if (!aiEnabled) {
         // Basic keyword mode
-        setTimeout(() => addMessage(getKeywordReply(msg), false), 500);
+        const reply = getKeywordReply(msg);
+        setTimeout(() => addMessage(reply, false), 500);
+        fetch('/student/chatbot/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ message: msg, reply: reply })
+        }).catch(() => {});
         return;
     }
 
     // OpenAI mode
-    history.push({ role: 'user', content: msg });
     chatInput.disabled = true;
     showTyping();
 
     try {
         const res = await fetch('/student/chatbot/ask', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-            body: JSON.stringify({ message: msg, history: history.slice(-10) })
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ message: msg })
         });
         const data = await res.json();
         removeTyping();
         addMessage(formatMarkdown(data.reply), false);
-        history.push({ role: 'assistant', content: data.reply });
     } catch(err) {
         removeTyping();
         addMessage('<span class="text-danger">Failed to connect. Please try again.</span>', false);
@@ -189,8 +204,8 @@ chatForm.addEventListener('submit', async function(e) {
     chatInput.focus();
 });
 
-function clearChat() {
-    history = [];
+async function clearChat() {
+    await fetch('/student/chatbot/history', { method: 'DELETE', headers: { 'X-CSRF-TOKEN': csrfToken } }).catch(() => {});
     chatMessages.innerHTML = '';
     addMessage(`Hi, {{ $user->first_name }}! Chat cleared. How can I help you with your OJT?`, false);
 }

@@ -95,16 +95,19 @@
 
                         <div class="row mb-3">
                             <div class="col-md-3">
-                                <label for="day" class="form-label">Day</label>
-                                <select class="form-select" id="day" name="day" required>
-                                    <option value="">-- Select Day --</option>
-                                    <option value="Monday" {{ (isset($section) && $section->day == 'Monday') ? 'selected' : '' }}>Monday</option>
-                                    <option value="Tuesday" {{ (isset($section) && $section->day == 'Tuesday') ? 'selected' : '' }}>Tuesday</option>
-                                    <option value="Wednesday" {{ (isset($section) && $section->day == 'Wednesday') ? 'selected' : '' }}>Wednesday</option>
-                                    <option value="Thursday" {{ (isset($section) && $section->day == 'Thursday') ? 'selected' : '' }}>Thursday</option>
-                                    <option value="Friday" {{ (isset($section) && $section->day == 'Friday') ? 'selected' : '' }}>Friday</option>
-                                    <option value="Saturday" {{ (isset($section) && $section->day == 'Saturday') ? 'selected' : '' }}>Saturday</option>
+                                @php
+                                    $selectedDays = old('day', isset($section) ? $section->daysArray() : []);
+                                @endphp
+                                <label for="day" class="form-label">Day(s)</label>
+                                <select class="form-select @error('day') is-invalid @enderror" id="day" name="day[]" multiple size="6" required>
+                                    @foreach(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $dayOption)
+                                        <option value="{{ $dayOption }}" {{ in_array($dayOption, (array) $selectedDays) ? 'selected' : '' }}>{{ $dayOption }}</option>
+                                    @endforeach
                                 </select>
+                                <small class="text-muted d-block mt-1">
+                                    Hold <kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on Mac) to select more than one day.
+                                </small>
+                                @error('day')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                             </div>
                             <div class="col-md-3">
                                 <label for="start_time" class="form-label">Start Time</label>
@@ -137,9 +140,10 @@
                                     name="days_count"
                                     min="1" 
                                     max="7"
-                                    value="{{ isset($section) ? $section->days_count : '1' }}"
-                                    required
+                                    value="{{ count((array) $selectedDays) ?: (isset($section) ? $section->days_count : 1) }}"
+                                    readonly
                                 >
+                                <small class="text-muted d-block mt-1">Counted from the days selected.</small>
                             </div>
                         </div>
 
@@ -298,3 +302,18 @@
     }
 </style>
 @endsection
+
+@push('scripts')
+<script>
+// Keep "Days per Week" in step with the day selection.
+document.addEventListener('DOMContentLoaded', function () {
+    const daySelect = document.getElementById('day');
+    const daysCount = document.getElementById('days_count');
+    if (!daySelect || !daysCount) return;
+
+    const sync = () => { daysCount.value = daySelect.selectedOptions.length; };
+    daySelect.addEventListener('change', sync);
+    sync();
+});
+</script>
+@endpush

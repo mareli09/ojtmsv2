@@ -25,6 +25,34 @@
         <a href="/faculty/section" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Sections</a>
     </div>
 
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <label class="col-form-label"><i class="fas fa-filter me-1"></i>Company</label>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <select name="company" class="form-select" onchange="this.form.submit()">
+                        <option value="">All students</option>
+                        <option value="__none__" {{ $companyFilter === '__none__' ? 'selected' : '' }}>No company yet ({{ $noCompanyCount }})</option>
+                        @foreach($companies as $company)
+                        <option value="{{ $company }}" {{ $companyFilter === $company ? 'selected' : '' }}>{{ $company }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-auto text-muted small">
+                    <span class="badge bg-success">{{ $withCompanyCount }}</span> with company
+                    <span class="badge bg-secondary ms-2">{{ $noCompanyCount }}</span> no company yet
+                </div>
+                @if($companyFilter !== '')
+                <div class="col-auto">
+                    <a href="/faculty/section/{{ $section->id }}/students" class="btn btn-sm btn-outline-secondary">Clear filter</a>
+                </div>
+                @endif
+            </form>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             @if($students->count() > 0)
@@ -37,6 +65,7 @@
                                 <th>Username</th>
                                 <th>Email</th>
                                 <th>Contact</th>
+                                <th>Company</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -49,6 +78,14 @@
                                 <td>{{ $student->username }}</td>
                                 <td>{{ $student->email }}</td>
                                 <td>{{ $student->contact ?? 'N/A' }}</td>
+                                <td>
+                                    @if($student->company_name)
+                                        {{ $student->company_name }}
+                                        @if($student->company_address)<br><small class="text-muted">{{ $student->company_address }}</small>@endif
+                                    @else
+                                        <span class="badge bg-secondary">No company yet</span>
+                                    @endif
+                                </td>
                                 <td>{{ ucfirst($student->status ?? 'active') }}</td>
                                 <td>
                                     <a href="/faculty/section/{{ $section->id }}/students/{{ $student->id }}" class="btn btn-sm btn-primary">
@@ -61,7 +98,7 @@
                     </table>
                 </div>
             @else
-                <p class="text-muted">No students currently assigned to this section.</p>
+                <p class="text-muted">{{ $companyFilter !== '' ? 'No students match this company filter.' : 'No students currently assigned to this section.' }}</p>
             @endif
         </div>
     </div>

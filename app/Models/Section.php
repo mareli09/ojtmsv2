@@ -30,6 +30,34 @@ class Section extends Model
         'deleted_at' => 'datetime',
     ];
 
+    /**
+     * Days of the week this section meets, as an array.
+     * Stored comma-separated; older rows separated their days with "/".
+     */
+    public function daysArray(): array
+    {
+        return collect(preg_split('/[,\/&]+/', (string) $this->day))
+            ->map(fn ($day) => trim($day))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Normalise a day selection (array or string) into the stored format.
+     */
+    public static function formatDays($days): string
+    {
+        $order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+        return collect(is_array($days) ? $days : explode(',', (string) $days))
+            ->map(fn ($day) => trim($day))
+            ->filter(fn ($day) => in_array($day, $order, true))
+            ->unique()
+            ->sortBy(fn ($day) => array_search($day, $order, true))
+            ->implode(', ');
+    }
+
     public function faculty()
     {
         return $this->belongsTo(User::class, 'faculty_id');

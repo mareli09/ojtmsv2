@@ -6,7 +6,6 @@
     <title>@yield('title') - OJTMS Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
     
     <style>
         /* BRAND COLORS */
@@ -290,9 +289,6 @@
         <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
             @if(session('user')->role === 'admin')
             <div class="navbar-nav">
-                <a class="nav-link" href="/">
-                    <i class="fas fa-home"></i> Back to Site
-                </a>
                 <a class="nav-link logout-btn" href="{{ route('logout') }}">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
@@ -315,7 +311,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     @stack('scripts')
 </body>
 </html>

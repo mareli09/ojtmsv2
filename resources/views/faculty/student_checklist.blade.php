@@ -24,7 +24,8 @@
         </a>
     </diV>
 
-    <p class="mb-3"><strong>Section:</strong> {{ $section->name }} | <strong>SY:</strong> {{ $section->school_year }} | <strong>Term:</strong> {{ $section->term }}</p>
+    <p class="mb-3"><strong>Section:</strong> {{ $section->name }} | <strong>SY:</strong> {{ $section->school_year }} | <strong>Term:</strong> {{ $section->term }}
+        | <strong>Company:</strong> {{ $student->company_name ?? 'No company yet' }}@if($student->company_address) ({{ $student->company_address }})@endif</p>
 
     <div class="card">
         <div class="card-body">

@@ -1,0 +1,27 @@
+# The Laravel application folder must never be reachable over HTTP.
+# Without this, anyone could open /ojtms_app/.env and read your database
+# password, mail credentials and APP_KEY.
+
+# Apache 2.4 (InfinityFree)
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2 fallback
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+# Belt and braces: refuse to hand over dotfiles and PHP source directly.
+<FilesMatch "\.(env|log|sql|json|lock|md|php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+Options -Indexes

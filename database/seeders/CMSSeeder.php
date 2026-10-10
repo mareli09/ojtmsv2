@@ -40,7 +40,7 @@ class CMSSeeder extends Seeder
             ],
             [
                 'key' => 'contact_email',
-                'value' => 'ojtms@example.edu.ph',
+                'value' => 'admin@ojtms.online',
                 'section' => 'contact',
             ],
             [

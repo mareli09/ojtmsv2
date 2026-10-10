@@ -93,7 +93,7 @@
 const chatMessages = document.getElementById('chatMessages');
 const chatForm     = document.getElementById('chatForm');
 const chatInput    = document.getElementById('chatInput');
-let history = [];
+const csrfToken    = '{{ csrf_token() }}';
 
 function addMessage(html, isUser) {
     const wrapper = document.createElement('div');
@@ -133,13 +133,23 @@ function formatMarkdown(text) {
         .replace(/\n/g, '<br>');
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Restore the saved conversation
+@json($chatHistory->map->only(['role', 'content'])).forEach(m => {
+    addMessage(m.role === 'user' ? escapeHtml(m.content) : formatMarkdown(m.content), m.role === 'user');
+});
+
 chatForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     const msg = chatInput.value.trim();
     if (!msg) return;
 
-    addMessage(msg, true);
-    history.push({ role: 'user', content: msg });
+    addMessage(escapeHtml(msg), true);
     chatInput.value = '';
     chatInput.disabled = true;
 
@@ -148,13 +158,12 @@ chatForm.addEventListener('submit', async function(e) {
     try {
         const res = await fetch('/faculty/chatbot/ask', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-            body: JSON.stringify({ message: msg, history: history.slice(-10) })
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ message: msg })
         });
         const data = await res.json();
         removeTyping();
         addMessage(formatMarkdown(data.reply), false);
-        history.push({ role: 'assistant', content: data.reply });
     } catch(err) {
         removeTyping();
         addMessage('<span class="text-danger">Failed to connect. Please try again.</span>', false);
@@ -164,8 +173,8 @@ chatForm.addEventListener('submit', async function(e) {
     chatInput.focus();
 });
 
-function clearChat() {
-    history = [];
+async function clearChat() {
+    await fetch('/faculty/chatbot/history', { method: 'DELETE', headers: { 'X-CSRF-TOKEN': csrfToken } }).catch(() => {});
     chatMessages.innerHTML = '';
     addMessage(`Hello, {{ $user->first_name }}! Chat cleared. How can I help you?`, false);
 }

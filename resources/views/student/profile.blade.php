@@ -13,6 +13,14 @@
     </div>
     @endif
 
+    @if(empty($user->company_name))
+    <div class="alert alert-warning">
+        <i class="fas fa-building me-1"></i>
+        You haven't declared your <strong>internship company</strong> yet. Leave it blank if you don't have one yet,
+        and come back to fill it in once you're placed, so your adviser knows where you are deployed.
+    </div>
+    @endif
+
     @if($errors->any())
     <div class="alert alert-danger alert-dismissible fade show">
         <ul class="mb-0">
@@ -37,7 +45,8 @@
                     <p class="text-muted small mb-1"><i class="fas fa-id-card me-1"></i> {{ $user->student_id ?? 'N/A' }}</p>
                     <p class="text-muted small mb-1"><i class="fas fa-envelope me-1"></i> {{ $user->email ?? 'N/A' }}</p>
                     <p class="text-muted small mb-1"><i class="fas fa-phone me-1"></i> {{ $user->contact ?? 'N/A' }}</p>
-                    <p class="text-muted small"><i class="fas fa-building me-1"></i> {{ $user->department ?? 'N/A' }}</p>
+                    <p class="text-muted small mb-1"><i class="fas fa-building me-1"></i> {{ $user->department ?? 'N/A' }}</p>
+                    <p class="text-muted small"><i class="fas fa-briefcase me-1"></i> {{ $user->company_name ?? 'No company yet' }}</p>
                 </div>
             </div>
         </div>
@@ -66,6 +75,24 @@
                                     value="{{ old('contact', $user->contact) }}"
                                     placeholder="e.g., 09123456789">
                                 @error('contact')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Internship Company Name</label>
+                                <input type="text" name="company_name" class="form-control @error('company_name') is-invalid @enderror {{ empty($user->company_name) ? 'border-warning border-2' : '' }}"
+                                    {{ empty($user->company_name) ? 'autofocus' : '' }}
+                                    value="{{ old('company_name', $user->company_name) }}"
+                                    placeholder="Leave blank if you don't have a company yet">
+                                @error('company_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Company Address</label>
+                                <input type="text" name="company_address" class="form-control @error('company_address') is-invalid @enderror"
+                                    value="{{ old('company_address', $user->company_address) }}"
+                                    placeholder="e.g., Makati City">
+                                @error('company_address')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
 

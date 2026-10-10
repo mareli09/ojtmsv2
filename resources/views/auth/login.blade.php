@@ -222,6 +222,8 @@
                 </div>
             @endif
 
+            {{-- Demo shortcuts expose usernames and the default password, so never show them on a live site. --}}
+            @unless(app()->isProduction())
             <div class="test-accounts">
                 <p><strong>🧪 Test Accounts</strong> <small>(click to fill)</small></p>
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
@@ -251,6 +253,7 @@
             </div>
 
             <hr>
+            @endunless
 
             <form action="{{ route('login.post') }}" method="POST">
                 @csrf

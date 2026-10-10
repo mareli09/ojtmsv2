@@ -17,3 +17,9 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+
+# Deployment kit: holds real credentials once filled in
+deploy/env-production.txt
+deploy/env-hostinger.txt
+# Database dumps contain real user data
+deploy/*.sql

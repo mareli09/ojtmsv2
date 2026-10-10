@@ -68,7 +68,7 @@
                         </thead>
                         <tbody>
                             @foreach($activeAnnouncements as $announcement)
-                            <tr>
+                            <tr id="annRow{{ $announcement->id }}">
                                 <td>{{ $loop->iteration }}</td>
                                 <td>
                                     <strong class="text-primary-custom">{{ $announcement->title }}</strong>
@@ -204,3 +204,23 @@
     }
 </style>
 @endsection
+
+@push('scripts')
+<script>
+// Highlight the announcement the user clicked "Read More" on from the landing page.
+document.addEventListener('DOMContentLoaded', function () {
+    const id = new URLSearchParams(window.location.search).get('view');
+    if (!id) return;
+
+    const row = document.getElementById('annRow' + id);
+    if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.style.transition = 'background-color 0.6s';
+        row.style.backgroundColor = 'rgba(244,182,27,0.35)';
+        setTimeout(() => { row.style.backgroundColor = ''; }, 2600);
+    }
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+});
+</script>
+@endpush

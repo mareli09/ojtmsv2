@@ -24,6 +24,7 @@ class DemoSeeder extends Seeder
         // 1. WIPE ALL TRANSACTIONAL DATA
         // ──────────────────────────────────────────────
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        DB::table('chat_messages')->truncate();
         DB::table('announcement_reads')->truncate();
         DB::table('student_checklists')->truncate();
         DB::table('incident_reports')->truncate();
@@ -149,6 +150,8 @@ class DemoSeeder extends Seeder
             'contact'     => '09200000001',
             'department'  => 'IT Department',
             'section_id'  => $sectionA->id,
+            'company_name'    => 'ABC Tech Solutions Inc.',
+            'company_address' => 'Makati City',
             'status'      => 'active',
         ]);
 
@@ -165,6 +168,8 @@ class DemoSeeder extends Seeder
             'contact'     => '09200000002',
             'department'  => 'IT Department',
             'section_id'  => $sectionA->id,
+            'company_name'    => 'Northwind Systems Corp.',
+            'company_address' => 'Ortigas Center, Pasig',
             'status'      => 'active',
         ]);
 
@@ -181,6 +186,8 @@ class DemoSeeder extends Seeder
             'contact'     => '09200000003',
             'department'  => 'IT Department',
             'section_id'  => $sectionB->id,
+            'company_name'    => 'BrightPath Software',
+            'company_address' => 'Quezon City',
             'status'      => 'active',
         ]);
 
@@ -197,6 +204,8 @@ class DemoSeeder extends Seeder
             'contact'     => '09200000004',
             'department'  => 'IT Department',
             'section_id'  => $sectionB->id,
+            'company_name'    => 'Metro Digital Innovations',
+            'company_address' => 'Taguig City',
             'status'      => 'active',
         ]);
 

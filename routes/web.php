@@ -4,6 +4,12 @@ use Illuminate\Support\Facades\Route;
 use App\Models\Section;
 
 Route::get('/', function () {
+    // Auto-logout any active session when visiting the landing page
+    if (session()->has('user_id') || session()->has('user')) {
+        session()->forget(['user_id', 'user', 'user_role']);
+        session()->flush();
+    }
+
     $cms = \App\Models\CMS::all()->keyBy('key');
     $announcements = \App\Models\Announcement::active()->latest()->get();
     
@@ -15,7 +21,7 @@ Route::get('/', function () {
             'about' => $cms->get('about')->value ?? 'The OJT Monitoring System (OJTMS) is committed to fostering meaningful partnerships between educational institutions, companies, and students through comprehensive on-the-job training management, real-time monitoring, and intelligent analytics.',
             'mission' => $cms->get('mission')->value ?? 'To empower students and educators through an intelligent, integrated platform that monitors OJT progress, ensures quality internship experiences, and facilitates meaningful skill development.',
             'vision' => $cms->get('vision')->value ?? 'A comprehensive platform leveraging AI and data analytics to create transparent, measurable, and transformative internship experiences that bridge academia and industry.',
-            'contact_email' => $cms->get('contact_email')->value ?? 'ojtms@example.edu.ph',
+            'contact_email' => $cms->get('contact_email')->value ?? 'admin@ojtms.online',
             'contact_phone' => $cms->get('contact_phone')->value ?? '+63 900 000 0000',
             'contact_address' => $cms->get('contact_address')->value ?? 'Sample City, Philippines',
             'facebook_url' => $cms->get('facebook_url')->value ?? 'https://facebook.com',
@@ -27,10 +33,101 @@ Route::get('/', function () {
     ]);
 });
 
+/*
+|--------------------------------------------------------------------------
+| Landing page contact form
+|--------------------------------------------------------------------------
+| Sends the visitor's message to the contact email address configured by the
+| admin in CMS Settings (falls back to MAIL_FROM_ADDRESS if unset).
+*/
+Route::post('/contact', function (\Illuminate\Http\Request $request) {
+    // Honeypot: bots fill hidden fields, humans never see this one.
+    if ($request->filled('website')) {
+        return back()->with('contact_success', 'Thank you! Your message has been sent.')->withFragment('contact');
+    }
+
+    $validated = $request->validate([
+        'name'    => 'required|string|max:100',
+        'email'   => 'required|email|max:150',
+        'subject' => 'required|string|max:150',
+        'message' => 'required|string|max:2000',
+    ]);
+
+    $recipient = \App\Models\CMS::getValue('contact_email') ?: config('mail.from.address');
+
+    if (!$recipient || !filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+        return back()
+            ->withInput()
+            ->with('contact_error', 'The contact email is not configured yet. Please try again later.')
+            ->withFragment('contact');
+    }
+
+    try {
+        \Illuminate\Support\Facades\Mail::to($recipient)->send(new \App\Mail\ContactFormMail(
+            $validated['name'],
+            $validated['email'],
+            $validated['subject'],
+            $validated['message'],
+        ));
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error('Contact form send failed: ' . $e->getMessage());
+
+        return back()
+            ->withInput()
+            ->with('contact_error', 'Sorry, your message could not be sent right now. Please try again later or email us directly at ' . $recipient . '.')
+            ->withFragment('contact');
+    }
+
+    return back()
+        ->with('contact_success', 'Thank you, ' . $validated['name'] . '! Your message has been sent. We will get back to you soon.')
+        ->withFragment('contact');
+})->middleware('throttle:5,1')->name('contact.send');
+
+/*
+|--------------------------------------------------------------------------
+| Announcement deep link (landing page "Read More")
+|--------------------------------------------------------------------------
+| Visitors are sent to the login page; after signing in they land on their own
+| role's announcements page with the announcement opened.
+*/
+Route::get('/announcements/{id}', function ($id) {
+    $announcement = \App\Models\Announcement::active()->find($id);
+
+    if (!$announcement) {
+        return redirect('/')->withFragment('announcements');
+    }
+
+    // Already signed in? Go straight to the announcement.
+    if (session()->has('user_id') && session()->has('user')) {
+        return redirect(announcementPathFor(session('user')->role) . '?view=' . $announcement->id);
+    }
+
+    session(['intended_announcement' => $announcement->id]);
+
+    return redirect('/login')->with('message', 'Please log in to read "' . $announcement->title . '".');
+})->name('announcement.view');
+
+if (!function_exists('announcementPathFor')) {
+    function announcementPathFor(string $role): string
+    {
+        return match ($role) {
+            'admin'   => '/admin/announcements',
+            'faculty' => '/faculty/announcements',
+            default   => '/student/announcements',
+        };
+    }
+}
+
 Route::get('/login', function () {
     // If already logged in, redirect to appropriate dashboard
     if (session()->has('user_id') && session()->has('user')) {
         $user = session('user');
+
+        // Came from a landing page "Read More"? Open that announcement instead.
+        if ($announcementId = session()->pull('intended_announcement')) {
+            return redirect(announcementPathFor($user->role) . '?view=' . $announcementId);
+        }
+
         if ($user->role === 'admin') {
             return redirect('/admin/dashboard');
         } elseif ($user->role === 'faculty') {
@@ -41,11 +138,17 @@ Route::get('/login', function () {
     }
     
     // Fetch one test account per role
-    $testAccounts = collect(['admin', 'faculty', 'student'])->map(function ($role) {
+    $testAccounts = app()->isProduction() ? collect() : collect(['admin', 'faculty', 'student'])->map(function ($role) {
         return \App\Models\User::where('role', $role)->where('status', 'active')->first();
     })->filter();
     
-    return view('auth.login', ['testAccounts' => $testAccounts]);
+    return response()
+        ->view('auth.login', ['testAccounts' => $testAccounts])
+        ->withHeaders([
+            'Cache-Control' => 'no-cache, no-store, must-revalidate, private',
+            'Pragma'        => 'no-cache',
+            'Expires'       => '0',
+        ]);
 });
 
 Route::post('/login', function (\Illuminate\Http\Request $request) {
@@ -57,8 +160,15 @@ Route::post('/login', function (\Illuminate\Http\Request $request) {
     $user = \App\Models\User::where('username', $request->username)->first();
 
     if ($user && \Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+        $announcementId = session()->pull('intended_announcement');
+
         session(['user_id' => $user->id, 'user' => $user, 'user_role' => $user->role]);
-        
+
+        // Came from a landing page "Read More"? Open that announcement.
+        if ($announcementId) {
+            return redirect(announcementPathFor($user->role) . '?view=' . $announcementId);
+        }
+
         // Redirect based on role
         if ($user->role === 'admin') {
             return redirect('/admin/dashboard');
@@ -71,6 +181,131 @@ Route::post('/login', function (\Illuminate\Http\Request $request) {
 
     return back()->withErrors(['username' => 'Invalid username or password.']);
 })->name('login.post');
+
+/*
+|--------------------------------------------------------------------------
+| Password recovery
+|--------------------------------------------------------------------------
+| Self-contained flow (the app uses its own session auth, not Laravel's
+| Auth facade): request a link by email, receive a single-use token that
+| expires, then set a new password.
+*/
+if (!defined('OJTMS_RESET_TOKEN_MINUTES')) define('OJTMS_RESET_TOKEN_MINUTES', 60);
+
+Route::get('/recover', function () {
+    return view('auth.recover');
+})->name('password.request');
+
+Route::post('/recover', function (\Illuminate\Http\Request $request) {
+    $request->validate(['email' => 'required|email']);
+
+    $email = strtolower(trim($request->input('email')));
+    $user  = \App\Models\User::whereRaw('LOWER(email) = ?', [$email])
+        ->whereNull('deleted_at')
+        ->first();
+
+    // Same reply either way, so the form can't be used to discover accounts.
+    $status = 'If that email is registered, a reset link is on its way. Please check your inbox and spam folder.';
+
+    if (!$user) {
+        return back()->with('status', $status);
+    }
+
+    if ($user->status !== 'active') {
+        return back()->withErrors(['email' => 'That account is inactive. Please contact the OJT admin.']);
+    }
+
+    $token = \Illuminate\Support\Str::random(64);
+
+    \Illuminate\Support\Facades\DB::table('password_reset_tokens')->updateOrInsert(
+        ['email' => $user->email],
+        ['token' => \Illuminate\Support\Facades\Hash::make($token), 'created_at' => now()]
+    );
+
+    try {
+        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\PasswordResetMail(
+            trim($user->first_name . ' ' . $user->last_name) ?: $user->username,
+            url('/reset-password/' . $token . '?email=' . urlencode($user->email)),
+            OJTMS_RESET_TOKEN_MINUTES
+        ));
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error('Password reset send failed: ' . $e->getMessage());
+
+        return back()->withErrors([
+            'email' => 'We could not send the reset email right now. Please try again later or contact the OJT admin.',
+        ]);
+    }
+
+    return back()->with('status', $status);
+})->middleware('throttle:5,1')->name('password.email');
+
+Route::get('/reset-password/{token}', function (\Illuminate\Http\Request $request, $token) {
+    $email = $request->query('email');
+
+    if (!$email || !ojtmsResetRecord($email, $token)) {
+        return redirect('/recover')->withErrors([
+            'email' => 'That reset link is invalid or has expired. Please request a new one.',
+        ]);
+    }
+
+    return view('auth.reset-password', ['token' => $token, 'email' => $email]);
+})->name('password.reset');
+
+Route::post('/reset-password', function (\Illuminate\Http\Request $request) {
+    $request->validate([
+        'token'    => 'required|string',
+        'email'    => 'required|email',
+        'password' => 'required|string|min:6|confirmed',
+    ]);
+
+    $record = ojtmsResetRecord($request->input('email'), $request->input('token'));
+
+    if (!$record) {
+        return redirect('/recover')->withErrors([
+            'email' => 'That reset link is invalid or has expired. Please request a new one.',
+        ]);
+    }
+
+    $user = \App\Models\User::whereRaw('LOWER(email) = ?', [strtolower($request->input('email'))])
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$user) {
+        return redirect('/recover')->withErrors(['email' => 'No account matches that email.']);
+    }
+
+    $user->update(['password' => bcrypt($request->input('password'))]);
+
+    // One use only.
+    \Illuminate\Support\Facades\DB::table('password_reset_tokens')->where('email', $record->email)->delete();
+
+    return redirect('/login')->with('message', 'Your password has been reset. You can now log in with your new password.');
+})->middleware('throttle:5,1')->name('password.update');
+
+if (!function_exists('ojtmsResetRecord')) {
+    /**
+     * Return the password_reset_tokens row when the token matches and is still
+     * within its lifetime, otherwise null (expired rows are cleaned up).
+     */
+    function ojtmsResetRecord(string $email, string $token)
+    {
+        $record = \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+            ->whereRaw('LOWER(email) = ?', [strtolower($email)])
+            ->first();
+
+        if (!$record) {
+            return null;
+        }
+
+        if (\Illuminate\Support\Carbon::parse($record->created_at)->addMinutes(OJTMS_RESET_TOKEN_MINUTES)->isPast()) {
+            \Illuminate\Support\Facades\DB::table('password_reset_tokens')->where('email', $record->email)->delete();
+
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\Hash::check($token, $record->token) ? $record : null;
+    }
+}
 
 Route::get('/logout', function () {
     session()->forget(['user_id', 'user', 'user_role']);
@@ -91,18 +326,195 @@ Route::get('/files/download', function (\Illuminate\Http\Request $request) {
 })->middleware('checkauth')->name('file.download');
 
 // Admin Routes
-Route::prefix('admin')->middleware('checkauth')->group(function () {
+Route::prefix('admin')->middleware('checkauth:admin')->group(function () {
     Route::get('/dashboard', function () {
-        $totalUsers = \App\Models\User::where('deleted_at', null)->count();
-        $admins = \App\Models\User::where('role', 'admin')->where('deleted_at', null)->count();
-        $faculty = \App\Models\User::where('role', 'faculty')->where('deleted_at', null)->count();
-        $students = \App\Models\User::where('role', 'student')->where('deleted_at', null)->count();
-        
+        // ---------- People ----------
+        $userRows = \App\Models\User::whereNull('deleted_at')
+            ->selectRaw('role, status, COUNT(*) as total')
+            ->groupBy('role', 'status')
+            ->get();
+
+        $totalUsers    = (int) $userRows->sum('total');
+        $admins        = (int) $userRows->where('role', 'admin')->sum('total');
+        $faculty       = (int) $userRows->where('role', 'faculty')->sum('total');
+        $students      = (int) $userRows->where('role', 'student')->sum('total');
+        $inactiveUsers = (int) $userRows->where('status', '!=', 'active')->sum('total');
+
+        $activeThisWeek = \App\Models\User::whereNull('deleted_at')
+            ->where('last_activity_at', '>=', now()->subDays(7))
+            ->count();
+
+        // ---------- Sections ----------
+        $sections = \App\Models\Section::whereNull('deleted_at')
+            ->with('faculty')
+            ->withCount('students')
+            ->orderBy('name')
+            ->get();
+
+        $activeSections    = $sections->where('status', 'active')->count();
+        $sectionsNoFaculty = $sections->whereNull('faculty_id')->count();
+
+        $studentsNoSection = \App\Models\User::where('role', 'student')
+            ->whereNull('deleted_at')->whereNull('section_id')->count();
+
+        $facultyNoSection = \App\Models\User::where('role', 'faculty')
+            ->whereNull('deleted_at')
+            ->whereNotIn('id', $sections->pluck('faculty_id')->filter())
+            ->count();
+
+        // ---------- OJT requirements ----------
+        $checklistItems = ['Medical Record', 'Receipt of OJT Kit', 'Waiver', 'Endorsement letter', 'MOA',
+            'Registration card', 'DTR', 'Weekly report', 'Monthly appraisal', 'Supervisor evaluation',
+            'Certificate of completion'];
+
+        $checklistRows = \App\Models\StudentChecklist::whereNull('deleted_at')
+            ->selectRaw('item, faculty_status, COUNT(*) as total')
+            ->groupBy('item', 'faculty_status')
+            ->get();
+
+        $approvedTotal   = (int) $checklistRows->where('faculty_status', 'approved')->sum('total');
+        $pendingTotal    = (int) $checklistRows->where('faculty_status', 'pending')->sum('total');
+        $declinedTotal   = (int) $checklistRows->where('faculty_status', 'declined')->sum('total');
+        $submissionTotal = $approvedTotal + $pendingTotal + $declinedTotal;
+
+        // Canonical list is the spine; anything else found in the data is appended.
+        $itemNames = collect($checklistItems)
+            ->merge($checklistRows->pluck('item'))
+            ->unique()
+            ->values();
+
+        $requirementStats = $itemNames->map(function ($item) use ($checklistRows) {
+            $rows = $checklistRows->where('item', $item);
+
+            return [
+                'item'     => $item,
+                'approved' => (int) $rows->where('faculty_status', 'approved')->sum('total'),
+                'pending'  => (int) $rows->where('faculty_status', 'pending')->sum('total'),
+                'declined' => (int) $rows->where('faculty_status', 'declined')->sum('total'),
+            ];
+        })->values();
+
+        // How far students have got through the requirement list
+        $approvedPerStudent = \App\Models\StudentChecklist::whereNull('deleted_at')
+            ->where('faculty_status', 'approved')
+            ->selectRaw('student_id, COUNT(DISTINCT item) as done')
+            ->groupBy('student_id')
+            ->pluck('done', 'student_id');
+
+        $requirementCount = count($checklistItems);
+        $studentsComplete = $approvedPerStudent->filter(fn ($done) => $done >= $requirementCount)->count();
+        $studentsStarted  = $approvedPerStudent->count();
+
+        // ---------- Incident reports ----------
+        $incidentRows = \App\Models\IncidentReport::selectRaw('faculty_status, COUNT(*) as total')
+            ->groupBy('faculty_status')->get();
+        $incidentsTotal   = (int) $incidentRows->sum('total');
+        $incidentsPending = (int) $incidentRows->where('faculty_status', 'pending')->sum('total');
+
+        // ---------- Content ----------
+        $activeAnnouncements = \App\Models\Announcement::active()->count();
+        $faqCount            = \App\Models\Faq::whereNull('deleted_at')->count();
+
+        // ---------- Registration trend (last 6 months) ----------
+        $trendStart = now()->startOfMonth()->subMonths(5);
+        $trendRows  = \App\Models\User::whereNull('deleted_at')
+            ->where('created_at', '>=', $trendStart)
+            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, COUNT(*) as total")
+            ->groupBy('ym')
+            ->pluck('total', 'ym');
+
+        $trendLabels = [];
+        $trendData   = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $month = now()->startOfMonth()->subMonths($i);
+            $trendLabels[] = $month->format('M Y');
+            $trendData[]   = (int) ($trendRows[$month->format('Y-m')] ?? 0);
+        }
+
+        // ---------- Recent activity ----------
+        $recentSubmissions = \App\Models\StudentChecklist::whereNull('deleted_at')
+            ->whereNotNull('student_submitted_at')
+            ->with('student')
+            ->orderByDesc('student_submitted_at')
+            ->take(6)
+            ->get();
+
+        $recentUsers = \App\Models\User::whereNull('deleted_at')
+            ->latest('created_at')
+            ->take(5)
+            ->get();
+
+        // ---------- Things the admin should act on ----------
+        $attention = [];
+        if ($sectionsNoFaculty > 0) {
+            $attention[] = ['level' => 'warning', 'icon' => 'fa-chalkboard-user',
+                'text' => $sectionsNoFaculty . ' ' . \Illuminate\Support\Str::plural('section', $sectionsNoFaculty) . ' without an assigned faculty',
+                'link' => '/admin/sections', 'action' => 'Assign'];
+        }
+        if ($studentsNoSection > 0) {
+            $attention[] = ['level' => 'warning', 'icon' => 'fa-user-graduate',
+                'text' => $studentsNoSection . ' ' . \Illuminate\Support\Str::plural('student', $studentsNoSection) . ' not enrolled in any section',
+                'link' => '/admin/users', 'action' => 'Enroll'];
+        }
+        if ($facultyNoSection > 0) {
+            $attention[] = ['level' => 'info', 'icon' => 'fa-user-tie',
+                'text' => $facultyNoSection . ' faculty ' . ($facultyNoSection === 1 ? 'member is' : 'members are') . ' not handling a section',
+                'link' => '/admin/sections', 'action' => 'Review'];
+        }
+        if ($pendingTotal > 0) {
+            $attention[] = ['level' => 'warning', 'icon' => 'fa-clock',
+                'text' => $pendingTotal . ' document ' . \Illuminate\Support\Str::plural('submission', $pendingTotal) . ' awaiting faculty review',
+                'link' => '/admin/reports', 'action' => 'View'];
+        }
+        if ($incidentsPending > 0) {
+            $attention[] = ['level' => 'critical', 'icon' => 'fa-triangle-exclamation',
+                'text' => $incidentsPending . ' unresolved incident ' . \Illuminate\Support\Str::plural('report', $incidentsPending),
+                'link' => '/admin/reports', 'action' => 'Review'];
+        }
+        if ($inactiveUsers > 0) {
+            $attention[] = ['level' => 'info', 'icon' => 'fa-user-slash',
+                'text' => $inactiveUsers . ' inactive user ' . \Illuminate\Support\Str::plural('account', $inactiveUsers),
+                'link' => '/admin/users', 'action' => 'Manage'];
+        }
+        if ($activeAnnouncements === 0) {
+            $attention[] = ['level' => 'info', 'icon' => 'fa-bullhorn',
+                'text' => 'No active announcements on the landing page',
+                'link' => '/admin/announcements/create', 'action' => 'Post one'];
+        }
+        if (\App\Models\CMS::getValue('openai_enabled') !== '1') {
+            $attention[] = ['level' => 'info', 'icon' => 'fa-robot',
+                'text' => 'AI assistant is turned off',
+                'link' => '/admin/cms', 'action' => 'Enable'];
+        }
+
         return view('admin.dashboard', [
-            'totalUsers' => $totalUsers,
-            'admins' => $admins,
-            'faculty' => $faculty,
-            'students' => $students,
+            'totalUsers'          => $totalUsers,
+            'admins'              => $admins,
+            'faculty'             => $faculty,
+            'students'            => $students,
+            'inactiveUsers'       => $inactiveUsers,
+            'activeThisWeek'      => $activeThisWeek,
+            'sections'            => $sections,
+            'activeSections'      => $activeSections,
+            'sectionsNoFaculty'   => $sectionsNoFaculty,
+            'studentsNoSection'   => $studentsNoSection,
+            'approvedTotal'       => $approvedTotal,
+            'pendingTotal'        => $pendingTotal,
+            'declinedTotal'       => $declinedTotal,
+            'submissionTotal'     => $submissionTotal,
+            'requirementStats'    => $requirementStats,
+            'requirementCount'    => $requirementCount,
+            'studentsComplete'    => $studentsComplete,
+            'studentsStarted'     => $studentsStarted,
+            'incidentsTotal'      => $incidentsTotal,
+            'incidentsPending'    => $incidentsPending,
+            'activeAnnouncements' => $activeAnnouncements,
+            'faqCount'            => $faqCount,
+            'trendLabels'         => $trendLabels,
+            'trendData'           => $trendData,
+            'recentSubmissions'   => $recentSubmissions,
+            'recentUsers'         => $recentUsers,
+            'attention'           => $attention,
         ]);
     });
     
@@ -126,6 +538,15 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
     });
     
     Route::post('/sections', function (\Illuminate\Http\Request $request) {
+        $request->validate([
+            'day'   => 'required|array|min:1',
+            'day.*' => 'in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
+        ], [
+            'day.required' => 'Please select at least one day.',
+        ]);
+
+        $days = Section::formatDays($request->input('day'));
+
         // Validate faculty isn't already assigned to another section
         if ($request->filled('faculty_id')) {
             $facultyId = $request->input('faculty_id');
@@ -143,10 +564,10 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
             'name' => $request->input('section_name'),
             'school_year' => $request->input('school_year'),
             'term' => $request->input('term'),
-            'day' => $request->input('day'),
+            'day' => $days,
             'start_time' => $request->input('start_time'),
             'end_time' => $request->input('end_time'),
-            'days_count' => $request->input('days_count'),
+            'days_count' => count($request->input('day')),
             'room' => $request->input('room'),
             'description' => $request->input('description'),
             'status' => $request->input('status'),
@@ -164,6 +585,15 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
     });
     
     Route::post('/sections/{id}', function ($id, \Illuminate\Http\Request $request) {
+        $request->validate([
+            'day'   => 'required|array|min:1',
+            'day.*' => 'in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
+        ], [
+            'day.required' => 'Please select at least one day.',
+        ]);
+
+        $days = Section::formatDays($request->input('day'));
+
         $section = Section::findOrFail($id);
         $newFacultyId = $request->input('faculty_id');
         $oldFacultyId = $section->faculty_id;
@@ -185,10 +615,10 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
             'name' => $request->input('section_name'),
             'school_year' => $request->input('school_year'),
             'term' => $request->input('term'),
-            'day' => $request->input('day'),
+            'day' => $days,
             'start_time' => $request->input('start_time'),
             'end_time' => $request->input('end_time'),
-            'days_count' => $request->input('days_count'),
+            'days_count' => count($request->input('day')),
             'room' => $request->input('room'),
             'description' => $request->input('description'),
             'status' => $request->input('status'),
@@ -823,6 +1253,50 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
         ]);
     });
     
+    // Export all tables as ZIP
+    Route::get('/reports/export/all', function () {
+        $zipPath = storage_path('app/exports/complete_db_' . now()->format('Y-m-d_H-i-s') . '.zip');
+        
+        // Create exports directory if it doesn't exist
+        if (!file_exists(dirname($zipPath))) {
+            mkdir(dirname($zipPath), 0755, true);
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE) !== true) {
+            abort(500, 'Could not create ZIP file');
+        }
+
+        $tables = ['users', 'sections', 'announcements', 'cms_settings'];
+
+        foreach ($tables as $table) {
+            $data = \App\Helpers\CsvExporter::exportTable($table);
+            
+            if ($data) {
+                $filename = str_replace(['_' . now()->format('Y-m-d_H-i-s') . '.csv'], '', $data['filename']);
+                
+                // Create CSV content in memory
+                $csvOutput = fopen('php://memory', 'r+');
+                fwrite($csvOutput, "\xEF\xBB\xBF"); // BOM
+                fputcsv($csvOutput, $data['headers']);
+                
+                foreach ($data['rows'] as $row) {
+                    fputcsv($csvOutput, $row);
+                }
+                
+                rewind($csvOutput);
+                $csvContent = stream_get_contents($csvOutput);
+                fclose($csvOutput);
+                
+                $zip->addFromString($filename . '.csv', $csvContent);
+            }
+        }
+
+        $zip->close();
+
+        return response()->download($zipPath)->deleteFileAfterSend(true);
+    });
+
     // Export individual tables as CSV
     Route::get('/reports/export/{table}', function ($table) {
         $allowedTables = ['users', 'sections', 'announcements', 'cms_settings'];
@@ -882,49 +1356,6 @@ Route::prefix('admin')->middleware('checkauth')->group(function () {
         return response()->json(['success' => true, 'html' => $html]);
     });
 
-    // Export all tables as ZIP
-    Route::get('/reports/export/all', function () {
-        $zipPath = storage_path('app/exports/complete_db_' . now()->format('Y-m-d_H-i-s') . '.zip');
-        
-        // Create exports directory if it doesn't exist
-        if (!file_exists(dirname($zipPath))) {
-            mkdir(dirname($zipPath), 0755, true);
-        }
-
-        $zip = new \ZipArchive();
-        if ($zip->open($zipPath, \ZipArchive::CREATE) !== true) {
-            abort(500, 'Could not create ZIP file');
-        }
-
-        $tables = ['users', 'sections', 'announcements', 'cms_settings'];
-
-        foreach ($tables as $table) {
-            $data = \App\Helpers\CsvExporter::exportTable($table);
-            
-            if ($data) {
-                $filename = str_replace(['_' . now()->format('Y-m-d_H-i-s') . '.csv'], '', $data['filename']);
-                
-                // Create CSV content in memory
-                $csvOutput = fopen('php://memory', 'r+');
-                fwrite($csvOutput, "\xEF\xBB\xBF"); // BOM
-                fputcsv($csvOutput, $data['headers']);
-                
-                foreach ($data['rows'] as $row) {
-                    fputcsv($csvOutput, $row);
-                }
-                
-                rewind($csvOutput);
-                $csvContent = stream_get_contents($csvOutput);
-                fclose($csvOutput);
-                
-                $zip->addFromString($filename . '.csv', $csvContent);
-            }
-        }
-
-        $zip->close();
-
-        return response()->download($zipPath)->deleteFileAfterSend(true);
-    });
 });
 
 // Faculty Routes
@@ -1040,12 +1471,26 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             return redirect('/faculty/section')->with('error', 'Section not found or not assigned to you.');
         }
 
-        $students = $section->students()->get();
+        $allStudents = $section->students()->get();
+
+        // Company filter: '' = all, '__none__' = no company declared, otherwise an exact company name.
+        $companyFilter = (string) request('company', '');
+        $companies = $allStudents->pluck('company_name')->filter()->unique()->sort()->values();
+
+        $students = $allStudents->filter(function ($s) use ($companyFilter) {
+            if ($companyFilter === '') return true;
+            if ($companyFilter === '__none__') return empty($s->company_name);
+            return $s->company_name === $companyFilter;
+        })->values();
 
         return view('faculty.section_students', [
             'user' => $user,
             'section' => $section,
             'students' => $students,
+            'companies' => $companies,
+            'companyFilter' => $companyFilter,
+            'withCompanyCount' => $allStudents->filter(fn ($s) => !empty($s->company_name))->count(),
+            'noCompanyCount' => $allStudents->filter(fn ($s) => empty($s->company_name))->count(),
         ]);
     });
 
@@ -1363,7 +1808,120 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
         }
 
-        return view('faculty.reports', ['user' => $user]);
+        $reports = [];
+        foreach (array_keys(\App\Helpers\FacultyReports::catalogue()) as $key) {
+            $reports[$key] = \App\Helpers\FacultyReports::build($key, $user);
+        }
+
+        return view('faculty.reports', [
+            'user'      => $user,
+            'catalogue' => \App\Helpers\FacultyReports::catalogue(),
+            'reports'   => $reports,
+        ]);
+    });
+
+    // Download one report as CSV
+    Route::get('/reports/export/{key}', function ($key) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        if (!\App\Helpers\FacultyReports::exists($key)) {
+            abort(404);
+        }
+
+        $report   = \App\Helpers\FacultyReports::build($key, $user);
+        $filename = \App\Helpers\FacultyReports::filename($key, 'csv');
+
+        return response()->streamDownload(function () use ($report) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // BOM so Excel reads UTF-8 correctly
+
+            fputcsv($out, [$report['title']]);
+            fputcsv($out, [$report['subtitle']]);
+            fputcsv($out, []);
+            fputcsv($out, $report['headers']);
+
+            foreach ($report['rows'] as $row) {
+                fputcsv($out, $row);
+            }
+
+            if ($report['summary']) {
+                fputcsv($out, []);
+                foreach ($report['summary'] as $label => $value) {
+                    fputcsv($out, [$label, $value]);
+                }
+            }
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type'        => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    });
+
+    // Download every report in one ZIP
+    Route::get('/reports/export-all', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $dir = storage_path('app/exports');
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $zipPath = $dir . '/faculty_reports_' . now()->format('Y-m-d_H-i-s') . '.zip';
+        $zip = new \ZipArchive();
+
+        if ($zip->open($zipPath, \ZipArchive::CREATE) !== true) {
+            return back()->withErrors(['export' => 'Could not create the ZIP archive.']);
+        }
+
+        foreach (array_keys(\App\Helpers\FacultyReports::catalogue()) as $key) {
+            $report = \App\Helpers\FacultyReports::build($key, $user);
+
+            $handle = fopen('php://memory', 'r+');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, [$report['title']]);
+            fputcsv($handle, [$report['subtitle']]);
+            fputcsv($handle, []);
+            fputcsv($handle, $report['headers']);
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, $row);
+            }
+            rewind($handle);
+            $zip->addFromString($key . '.csv', stream_get_contents($handle));
+            fclose($handle);
+        }
+
+        $zip->close();
+
+        return response()->download($zipPath)->deleteFileAfterSend(true);
+    });
+
+    // Printable view - the browser's "Save as PDF" turns this into a PDF
+    Route::get('/reports/print/{key}', function ($key) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+        if ($key !== 'all' && !\App\Helpers\FacultyReports::exists($key)) {
+            abort(404);
+        }
+
+        $keys = $key === 'all' ? array_keys(\App\Helpers\FacultyReports::catalogue()) : [$key];
+
+        $reports = [];
+        foreach ($keys as $reportKey) {
+            $reports[$reportKey] = \App\Helpers\FacultyReports::build($reportKey, $user);
+        }
+
+        return view('faculty.reports_print', [
+            'user'    => $user,
+            'reports' => $reports,
+        ]);
     });
 
     Route::get('/faqs', function () {
@@ -1491,12 +2049,78 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
         ]);
     });
 
+    Route::put('/profile', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $validated = $request->validate([
+            'first_name'  => 'required|string|max:50',
+            'middle_name' => 'nullable|string|max:50',
+            'last_name'   => 'required|string|max:50',
+            'email'       => 'required|email|max:150|unique:users,email,' . $user->id,
+            'contact'     => 'nullable|string|max:20',
+            'department'  => 'nullable|string|max:100',
+        ]);
+
+        \App\Models\User::where('id', $user->id)->update([
+            'first_name'  => $validated['first_name'],
+            'middle_name' => $validated['middle_name'],
+            'last_name'   => $validated['last_name'],
+            'name'        => trim($validated['first_name'] . ' ' . $validated['last_name']),
+            'email'       => $validated['email'],
+            'contact'     => $validated['contact'],
+            'department'  => $validated['department'],
+        ]);
+
+        session(['user' => \App\Models\User::find($user->id)]);
+
+        return redirect('/faculty/profile')->with('success', 'Your profile has been updated.');
+    });
+
+    Route::put('/password', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'faculty') {
+            return redirect('/admin/dashboard')->withErrors(['auth' => 'Unauthorized access.']);
+        }
+
+        $request->validate([
+            'current_password' => 'required|string',
+            'password'         => 'required|string|min:6|confirmed',
+        ]);
+
+        $current = \App\Models\User::find($user->id);
+
+        if (!\Illuminate\Support\Facades\Hash::check($request->input('current_password'), $current->password)) {
+            return back()->withErrors(['current_password' => 'Your current password is incorrect.']);
+        }
+
+        if (\Illuminate\Support\Facades\Hash::check($request->input('password'), $current->password)) {
+            return back()->withErrors(['password' => 'Please choose a password different from your current one.']);
+        }
+
+        $current->update(['password' => bcrypt($request->input('password'))]);
+
+        session(['user' => \App\Models\User::find($user->id)]);
+
+        return redirect('/faculty/profile')->with('success', 'Your password has been changed.');
+    });
+
     // Faculty AI Chatbot
     Route::get('/chatbot', function () {
         $user = session('user');
         if ($user->role !== 'faculty') return redirect('/admin/dashboard');
         $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
-        return view('faculty.chatbot', compact('user', 'aiEnabled'));
+        $chatHistory = \App\Models\ChatMessage::where('user_id', $user->id)->orderBy('id')->get();
+        return view('faculty.chatbot', compact('user', 'aiEnabled', 'chatHistory'));
+    });
+
+    Route::delete('/chatbot/history', function () {
+        $user = session('user');
+        if ($user->role !== 'faculty') return response()->json(['error' => 'Unauthorized'], 403);
+        \App\Models\ChatMessage::where('user_id', $user->id)->delete();
+        return response()->json(['ok' => true]);
     });
 
     Route::post('/chatbot/ask', function (\Illuminate\Http\Request $request) {
@@ -1544,7 +2168,7 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
                 }
             }
             $sectionName = $sections->firstWhere('id', $s->section_id)?->name ?? 'N/A';
-            $studentSummaries[] = "- {$s->first_name} {$s->last_name} (ID: {$s->student_id}, Section: {$sectionName}): "
+            $studentSummaries[] = "- {$s->first_name} {$s->last_name} (ID: {$s->student_id}, Section: {$sectionName}, Company: " . ($s->company_name ?: "No company yet") . "): "
                 . "Checklist {$completedItems}/10, DTR hours {$dtrHours}/{$targetHours}, "
                 . "Approved {$approved}, Pending {$pending}, Declined {$declined}. "
                 . "Completed: " . (empty($completedList) ? 'None' : implode(', ', $completedList)) . ". "
@@ -1569,7 +2193,11 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
             . "\n\nUse this data to answer questions about specific students, progress, completion, rankings, etc. "
             . "Keep responses concise and practical.";
 
-        $messages = $request->input('history', []);
+        // Previous turns come from the saved conversation, not from the browser.
+        $messages = \App\Models\ChatMessage::where('user_id', $user->id)
+            ->orderByDesc('id')->limit(10)->get()->reverse()
+            ->map(fn ($m) => ['role' => $m->role, 'content' => $m->content])
+            ->values()->all();
         array_unshift($messages, ['role' => 'system', 'content' => $systemPrompt]);
         $messages[] = ['role' => 'user', 'content' => $request->input('message')];
 
@@ -1602,6 +2230,8 @@ Route::prefix('faculty')->middleware('checkauth')->group(function () {
 
             $data = json_decode($response, true);
             $reply = $data['choices'][0]['message']['content'] ?? 'No response from AI.';
+            \App\Models\ChatMessage::create(['user_id' => $user->id, 'role' => 'user', 'content' => $request->input('message')]);
+            \App\Models\ChatMessage::create(['user_id' => $user->id, 'role' => 'assistant', 'content' => $reply]);
             return response()->json(['reply' => $reply]);
         } catch (\Exception $e) {
             return response()->json(['reply' => 'Error connecting to OpenAI: ' . $e->getMessage()]);
@@ -2813,7 +3443,15 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         $user = session('user');
         if ($user->role !== 'student') return redirect('/admin/dashboard');
         $aiEnabled = \App\Models\CMS::getValue('openai_enabled') === '1';
-        return view('student.chatbot', compact('user', 'aiEnabled'));
+        $chatHistory = \App\Models\ChatMessage::where('user_id', $user->id)->orderBy('id')->get();
+        return view('student.chatbot', compact('user', 'aiEnabled', 'chatHistory'));
+    });
+
+    Route::delete('/chatbot/history', function () {
+        $user = session('user');
+        if ($user->role !== 'student') return response()->json(['error' => 'Unauthorized'], 403);
+        \App\Models\ChatMessage::where('user_id', $user->id)->delete();
+        return response()->json(['ok' => true]);
     });
 
     Route::post('/chatbot/ask', function (\Illuminate\Http\Request $request) {
@@ -2859,6 +3497,7 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             . "For those, briefly say: 'That topic is outside my scope. I can help with OJT-related questions — your checklist, submissions, DTR, and more.' "
             . "\n\nStudent: {$user->first_name} {$user->last_name} (ID: {$user->student_id}). "
             . "Section: " . ($section->name ?? 'N/A') . ". "
+            . "Internship company: " . ($user->company_name ?: 'No company yet') . ". "
             . "Faculty: " . ($faculty ? $faculty->first_name . ' ' . $faculty->last_name : 'Not assigned') . ". "
             . "Checklist completed: " . count($completedList) . "/10. "
             . "Completed items: " . (empty($completedList) ? 'None' : implode(', ', $completedList)) . ". "
@@ -2867,7 +3506,11 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
             . "Pending reviews: {$pendingCount}. Declined submissions: {$declinedCount}. "
             . "\n\nKeep responses concise and helpful. Guide the student on how to use the system.";
 
-        $messages = $request->input('history', []);
+        // Previous turns come from the saved conversation, not from the browser.
+        $messages = \App\Models\ChatMessage::where('user_id', $user->id)
+            ->orderByDesc('id')->limit(10)->get()->reverse()
+            ->map(fn ($m) => ['role' => $m->role, 'content' => $m->content])
+            ->values()->all();
         array_unshift($messages, ['role' => 'system', 'content' => $systemPrompt]);
         $messages[] = ['role' => 'user', 'content' => $request->input('message')];
 
@@ -2899,10 +3542,21 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
 
             $data = json_decode($response, true);
             $reply = $data['choices'][0]['message']['content'] ?? 'No response from AI.';
+            \App\Models\ChatMessage::create(['user_id' => $user->id, 'role' => 'user', 'content' => $request->input('message')]);
+            \App\Models\ChatMessage::create(['user_id' => $user->id, 'role' => 'assistant', 'content' => $reply]);
             return response()->json(['reply' => $reply]);
         } catch (\Exception $e) {
             return response()->json(['reply' => 'Error connecting to AI: ' . $e->getMessage()]);
         }
+    });
+
+    Route::post('/chatbot/save', function (\Illuminate\Http\Request $request) {
+        $user = session('user');
+        if ($user->role !== 'student') return response()->json(['error' => 'Unauthorized'], 403);
+        $request->validate(['message' => 'required|string|max:2000', 'reply' => 'required|string|max:5000']);
+        \App\Models\ChatMessage::create(['user_id' => $user->id, 'role' => 'user', 'content' => $request->input('message')]);
+        \App\Models\ChatMessage::create(['user_id' => $user->id, 'role' => 'assistant', 'content' => $request->input('reply')]);
+        return response()->json(['ok' => true]);
     });
 
     // Profile Settings
@@ -2917,14 +3571,18 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         if ($user->role !== 'student') return redirect('/admin/dashboard');
 
         $validated = $request->validate([
-            'email'    => 'required|email|unique:users,email,' . $user->id,
-            'contact'  => 'nullable|string|max:20',
-            'password' => 'nullable|string|min:6|confirmed',
+            'email'           => 'required|email|unique:users,email,' . $user->id,
+            'contact'         => 'nullable|string|max:20',
+            'company_name'    => 'nullable|string|max:255',
+            'company_address' => 'nullable|string|max:255',
+            'password'        => 'nullable|string|min:6|confirmed',
         ]);
 
         $updateData = [
-            'email'   => $validated['email'],
-            'contact' => $validated['contact'] ?? $user->contact,
+            'email'           => $validated['email'],
+            'contact'         => $validated['contact'] ?? $user->contact,
+            'company_name'    => $validated['company_name'] ?? null,
+            'company_address' => $validated['company_address'] ?? null,
         ];
 
         if (!empty($validated['password'])) {
@@ -2936,6 +3594,11 @@ Route::prefix('student')->middleware('checkauth')->group(function () {
         // Refresh session
         $refreshed = \App\Models\User::find($user->id);
         session(['user' => $refreshed]);
+
+        // First time the company is declared: show it on the dashboard.
+        if (empty($user->company_name) && !empty($validated['company_name'])) {
+            return redirect('/student/dashboard')->with('success', 'Your internship company has been saved.');
+        }
 
         return redirect('/student/profile')->with('success', 'Profile updated successfully.');
     });

@@ -233,6 +233,13 @@
 
         <!-- MAIN CONTENT -->
         <div class="main-content">
+            @if(empty(session('user')->company_name) && !request()->is('student/profile'))
+            <div class="alert alert-warning d-flex align-items-center gap-2 mx-3 mt-3 mb-0">
+                <i class="fas fa-building"></i>
+                <div class="flex-grow-1">You haven't declared your <strong>internship company</strong> yet. Add it once you have one so your adviser knows where you are deployed.</div>
+                <a href="/student/profile" class="btn btn-sm btn-warning">Add company</a>
+            </div>
+            @endif
             @yield('content')
         </div>
     </div>

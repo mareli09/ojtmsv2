@@ -349,7 +349,7 @@ body{
                     <i class="far fa-calendar me-2"></i>{{ $announcement->created_at->format('M d, Y') }}
                 </p>
                 <p class="text-primary-custom">{{ Str::limit($announcement->content, 100) }}</p>
-                <a href="#" class="text-accent-custom fw-600" style="text-decoration:none;">Read More →</a>
+                <a href="/announcements/{{ $announcement->id }}" class="text-accent-custom fw-600" style="text-decoration:none;">Read More →</a>
             </div>
         </div>
         @endforeach
@@ -374,18 +374,53 @@ body{
         <div class="col-md-6">
             <div class="contact-form-box p-5 rounded h-100">
                 <h3 class="fw-bold mb-4"><i class="fas fa-envelope me-2"></i>Contact Us</h3>
-                <form>
+
+                @if(session('contact_success'))
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-circle-check me-2"></i>{{ session('contact_success') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                @endif
+
+                @if(session('contact_error'))
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-triangle-exclamation me-2"></i>{{ session('contact_error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                @endif
+
+                <form action="{{ route('contact.send') }}" method="POST" novalidate>
+                    @csrf
+
+                    <!-- Honeypot: hidden from humans, filled by bots -->
+                    <div style="position:absolute; left:-9999px;" aria-hidden="true">
+                        <label>Website</label>
+                        <input type="text" name="website" tabindex="-1" autocomplete="off">
+                    </div>
+
                     <div class="mb-3">
-                        <input type="text" class="form-control" placeholder="Full Name" required>
+                        <input type="text" name="name" value="{{ old('name') }}"
+                               class="form-control @error('name') is-invalid @enderror"
+                               placeholder="Full Name" maxlength="100" required>
+                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="mb-3">
-                        <input type="email" class="form-control" placeholder="Email Address" required>
+                        <input type="email" name="email" value="{{ old('email') }}"
+                               class="form-control @error('email') is-invalid @enderror"
+                               placeholder="Email Address" maxlength="150" required>
+                        @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="mb-3">
-                        <input type="text" class="form-control" placeholder="Subject" required>
+                        <input type="text" name="subject" value="{{ old('subject') }}"
+                               class="form-control @error('subject') is-invalid @enderror"
+                               placeholder="Subject" maxlength="150" required>
+                        @error('subject')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="mb-3">
-                        <textarea class="form-control" rows="5" placeholder="Your Message" required></textarea>
+                        <textarea name="message" rows="5" maxlength="2000"
+                                  class="form-control @error('message') is-invalid @enderror"
+                                  placeholder="Your Message" required>{{ old('message') }}</textarea>
+                        @error('message')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <button type="submit" class="btn btn-ojtms w-100">Send Message</button>
                 </form>
@@ -399,12 +434,16 @@ body{
                 
                 <div class="mb-4">
                     <p class="text-primary-custom fw-bold mb-1">Email Address</p>
-                    <p class="text-muted">{{ $cms['contact_email'] ?? 'ojtms@example.edu.ph' }}</p>
+                    <p class="text-muted mb-0">
+                        <a href="mailto:{{ $cms['contact_email'] ?? 'admin@ojtms.online' }}" class="text-muted text-decoration-none">{{ $cms['contact_email'] ?? 'admin@ojtms.online' }}</a>
+                    </p>
                 </div>
 
                 <div class="mb-4">
                     <p class="text-primary-custom fw-bold mb-1">Phone Number</p>
-                    <p class="text-muted">{{ $cms['contact_phone'] ?? '+63 900 000 0000' }}</p>
+                    <p class="text-muted mb-0">
+                        <a href="tel:{{ preg_replace('/[^0-9+]/', '', $cms['contact_phone'] ?? '+63 900 000 0000') }}" class="text-muted text-decoration-none">{{ $cms['contact_phone'] ?? '+63 900 000 0000' }}</a>
+                    </p>
                 </div>
 
                 <div class="mb-4">

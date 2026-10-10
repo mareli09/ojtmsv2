@@ -30,6 +30,8 @@ class User extends Authenticatable
         'contact',
         'department',
         'section_id',
+        'company_name',
+        'company_address',
         'status',
         'last_activity_at',
     ];
@@ -76,5 +78,13 @@ class User extends Authenticatable
             return $this->first_name . ' ' . $this->middle_name . ' ' . $this->last_name;
         }
         return $this->first_name . ' ' . $this->last_name;
+    }
+
+    /**
+     * Get the AI chatbot messages of the user.
+     */
+    public function chatMessages()
+    {
+        return $this->hasMany(ChatMessage::class);
     }
 }

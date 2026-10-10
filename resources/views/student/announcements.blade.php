@@ -73,3 +73,21 @@
     @endif
 </div>
 @endsection
+
+@push('scripts')
+<script>
+// Open the announcement the user clicked "Read More" on from the landing page.
+document.addEventListener('DOMContentLoaded', function () {
+    const id = new URLSearchParams(window.location.search).get('view');
+    if (!id) return;
+
+    const modal = document.getElementById('annModal' + id);
+    if (modal) {
+        new bootstrap.Modal(modal).show();
+    }
+
+    // Clean the URL so a refresh doesn't reopen it.
+    window.history.replaceState({}, document.title, window.location.pathname);
+});
+</script>
+@endpush
